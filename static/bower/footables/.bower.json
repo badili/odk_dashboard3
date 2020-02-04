@@ -1,0 +1,14 @@
+{
+  "name": "footables",
+  "homepage": "https://github.com/fooplugins/FooTable",
+  "version": "3.1.4",
+  "_release": "3.1.4",
+  "_resolution": {
+    "type": "version",
+    "tag": "3.1.4",
+    "commit": "8ccbd77222f6f533fe914e1f3dbb49e3cf650b2f"
+  },
+  "_source": "https://github.com/fooplugins/FooTable.git",
+  "_target": "*",
+  "_originalSource": "https://github.com/fooplugins/FooTable.git"
+}
