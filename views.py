@@ -28,11 +28,13 @@ import os
 terminal = Terminal()
 
 
-def login_page(request):
+def login_page(request, *args, **kwargs):
     csrf_token = get_or_create_csrf_token(request)
     page_settings = {'page_title': "%s | Login Page" % settings.SITE_NAME, 'csrf_token': csrf_token}
     print('\nLogin attempt')
-    terminal.tprint(csrf_token, 'ok')
+    print(kwargs)
+    print(args)
+    # terminal.tprint(csrf_token, 'ok')
 
     try:
         username = request.POST['username']
