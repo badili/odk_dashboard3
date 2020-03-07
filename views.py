@@ -291,7 +291,7 @@ def get_or_create_csrf_token(request):
     token = request.META.get('CSRF_COOKIE', None)
     if token is None:
         print('Getting a new token')
-        token = csrf._get_new_csrf_string()
+        token = csrf.get_token(request)
         request.META['CSRF_COOKIE'] = token
     else:
         print('using an old token')
