@@ -32,9 +32,6 @@ def login_page(request, *args, **kwargs):
     csrf_token = get_or_create_csrf_token(request)
     page_settings = {'page_title': "%s | Login Page" % settings.SITE_NAME, 'csrf_token': csrf_token}
     print('\nLogin attempt')
-    print(kwargs)
-    print(args)
-    # terminal.tprint(csrf_token, 'ok')
 
     try:
         username = request.POST['username']
@@ -46,13 +43,14 @@ def login_page(request, *args, **kwargs):
             if user is None:
                 terminal.tprint("Couldn't authenticate the user... redirect to login page", 'fail')
                 page_settings['error'] = settings.SITE_NAME + " could not authenticate you. You entered an invalid username or password"
+                page_settings['username'] = username
                 return render(request, 'login.html', page_settings)
             else:
                 terminal.tprint('All ok', 'debug')
                 login(request, user)
                 return redirect('/dashboard', request=request)
         else:
-            return render(request, 'login.html')
+            return render(request, 'login.html', {username: username})
     except KeyError as e:
         # ask the user to enter the username and/or password
         terminal.tprint('\nUsername/password not defined: %s' % str(e), 'warn')
@@ -81,6 +79,7 @@ def user_logout(request):
         print(key)
     if 'cur_user' in request.session:
         del request.session['cur_user']
+
     return redirect('/', request=request)
 
 
