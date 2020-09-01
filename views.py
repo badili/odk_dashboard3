@@ -31,11 +31,16 @@ terminal = Terminal()
 def login_page(request, *args, **kwargs):
     csrf_token = get_or_create_csrf_token(request)
     page_settings = {'page_title': "%s | Login Page" % settings.SITE_NAME, 'csrf_token': csrf_token}
-    print('\nLogin attempt')
 
     try:
-        username = request.POST['username']
-        password = request.POST['pass']
+        # check if we have some username and password in kwargs
+        if 'user' in kwargs:
+            # use the explicitly passed username and password over the form filled ones
+            username = kwargs['user']['username']
+            password = kwargs['user']['pass']
+        else:
+            username = request.POST['username']
+            password = request.POST['pass']
 
         if username is not None:
             user = authenticate(username=username, password=password)
@@ -65,9 +70,9 @@ def login_page(request, *args, **kwargs):
         profile.save()
         return render(request, 'login.html', page_settings)
     except Exception as e:
-        terminal.tprint(csrf_token, 'ok')
-        terminal.tprint(str(e), 'fail')
-        page_settings['error'] = "There was an error while authenticating.<br />Please try again and if the error persist, please contact the system administrator"
+        if settings.DEBUG: terminal.tprint(str(e), 'fail')
+        if settings.DEBUG: logging.error(traceback.format_exc())
+        page_settings['message'] = "There was an error while authenticating you. Please try again and if the error persist, please contact the system administrator"
         return render(request, 'login.html', page_settings)
 
 
