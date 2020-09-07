@@ -184,8 +184,8 @@ def form_structure(request):
     parser = OdkParser()
     is_first_login = parser.is_first_login()
     are_ona_settings_saved = parser.are_ona_settings_saved()
-    if is_first_login is True or are_ona_settings_saved is False:
-        return system_settings(request)
+    # if is_first_login is True or are_ona_settings_saved is False:
+    #     return system_settings(request)
 
     try:
         form_id = int(request.POST['form_id'])
@@ -206,7 +206,7 @@ def form_structure(request):
 # @login_required(login_url='/login')
 def download_data(request):
     # given the nodes, download the associated data
-    parser = OdkParser()
+    parser = OdkParser(None, None, settings.ONADATA_TOKEN)
     is_first_login = parser.is_first_login()
     are_ona_settings_saved = parser.are_ona_settings_saved()
     if is_first_login is True or are_ona_settings_saved is False:
