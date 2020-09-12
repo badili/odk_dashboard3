@@ -1,31 +1,43 @@
   # Python 2 only
 
-
+import os
 import json
 import logging
 import traceback
 import gzip
 
-try:
-    from io import StringIO as IO
-except ImportError:
-    from io import StringIO as IO
-
+from io import StringIO as IO
+from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.conf import settings
-from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth import authenticate, login, logout, get_user_model
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.hashers import make_password
+from django.contrib.sites.shortcuts import get_current_site
+from django.core.exceptions import ValidationError
 from django.http.response import HttpResponse
 from django.shortcuts import render, redirect
 from django.middleware import csrf
+from django.utils import six, timezone
+from django.utils.encoding import force_bytes, force_text
+from django.utils.http import urlsafe_base64_encode
 
 from wsgiref.util import FileWrapper
 
 from vendor.odk_parser import OdkParser
 from vendor.terminal_output import Terminal
 from vendor.models import ODKForm, FormViews, Profile
+from vendor.notifications import Notification
 
-import os
+from sentry_sdk import init as sentry_init, capture_exception as sentry_ce
+
 terminal = Terminal()
+
+class TokenGenerator(PasswordResetTokenGenerator):
+    def _make_hash_value(self, user, timestamp):
+        return  six.text_type(user.pk) + six.text_type(timestamp) + six.text_type(user.username)
+account_activation_token = TokenGenerator()
+
+sentry_init(settings.SENTRY_DSN, environment=settings.ENV_ROLE)
 
 
 def login_page(request, *args, **kwargs):
@@ -289,6 +301,157 @@ def refresh_forms(request):
         logging.error(traceback.format_exc())
 
     return HttpResponse(json.dumps({'error': False, 'all_forms': all_forms}))
+
+
+@login_required(login_url='/login')
+def add_user(request):
+    # given a user details add the user
+    # 1. Get the next personnel code
+    # 1. Add the details of the user and set is_active to 0. Generate a password
+    # 2. Send email to the user with the activation link
+    
+    try:
+        UserModel = get_user_model()
+
+        nickname=request.POST.get('username')
+        username=request.POST.get('username')
+        designation=request.POST.get('designation')
+        tel=request.POST.get('tel')
+        email=request.POST.get('email')
+        first_name=request.POST.get('first_name')
+        last_name=request.POST.get('surname')
+
+        new_user = UserModel(
+            nickname=username,
+            username=username,
+            designation=designation,
+            tel=tel,
+            email=email,
+            first_name=first_name,
+            last_name=last_name,
+            password=make_password('TestPass1234'),
+            is_active=0
+        )
+        new_user.full_clean()
+        new_user.save()
+
+        # send an email to this user
+        notify = Notification()
+        uid = urlsafe_base64_encode(force_bytes(new_user.pk))
+        token = account_activation_token.make_token(new_user)
+        current_site = get_current_site(request)
+
+        email_settings = {
+            'template': 'emails/verify_account.html',
+            'subject': '[%s] Confirm Registration' % settings.SITE_NAME,
+            'sender_email': settings.SENDER_EMAIL,
+            'recipient_email': email,
+            'site_name': settings.SITE_NAME,
+            'site_url': 'http://%s' % current_site.domain,
+            'title': 'Confirm Registration',
+            'salutation': 'Dear %s' % first_name,
+            'verification_link': 'http://%s/activate_new_user/%s/%s' % (current_site.domain, uid, token),
+            'message': 'You have been registered successfully to the %s. We are glad to have you on board. Please click on the button below to activate your account. You will not be able to use your account until it is activated.' % settings.SITE_NAME,
+            'message_sub_heading': 'You have been registered successfully'
+        }
+        notify.send_email(email_settings)
+
+        return {'error': False, 'message': 'The user has been saved successfully'}
+    
+    except ValidationError as e:
+        return {'error': True, 'message': 'There was an error while saving the user: %s' % str(e)}
+    except Exception as e:
+        if settings.DEBUG: terminal.tprint(str(e), 'fail')
+        sentry_ce()
+        raise
+
+
+def update_password(request, user, password, token=None):
+    try:
+        uid = force_text(urlsafe_base64_decode(user))
+        user = Personnel.objects.get(pk=uid)
+
+        # if we have a token, ensure that it is the correct token
+        if token:
+            if not account_activation_token.check_token(user, token):
+                raise Exception('Invalid token')
+        
+        user.password = make_password(password)
+        user.save()
+
+        # update the new password to the ODK account
+
+        # send an email that the account has been activated
+        email_settings = {
+            'template': 'emails/general-email.html',
+            'subject': '[%s] Password Updated' % settings.SITE_NAME,
+            'sender_email': settings.SENDER_EMAIL,
+            'recipient_email': user.email,
+            'title': 'Password Updated',
+            'message': 'Dear %s,<br /><p>You have successfully updated your password to the %s. You can now log in using your new password.</p>' % (user.first_name, settings.SITE_NAME),
+        }
+        notify = Notification()
+        notify.send_email(email_settings)
+        # @todo, if the user is using the default password, send the user to the password setting page
+        return {'message': 'Thank you for your email confirmation. Now you can login your account.', 'username': user.email}
+
+        return {'username': user.username, 'pass': password}
+    except Exception as e:
+        if settings.DEBUG: terminal.tprint(str(e), 'fail')
+        sentry.captureException()
+        raise
+
+
+def activate_user(request, user, token):
+    try:
+        uid = force_text(urlsafe_base64_decode(user))
+        user = Personnel.objects.get(pk=uid)
+        
+        if not account_activation_token.check_token(user, token):
+            raise InvalidToken('Invalid token')
+
+        user.is_active = True
+        user.save()
+
+        # create a new ODK user to the boxgirls account
+        user_details = {
+            'username': user.username,
+            'first_name': user.first_name,
+            'last_name': user.last_name,
+            'email': user.email,
+            'password': 'TestPass1234'          # use a default password for now. It will be updated later on
+        }
+
+        # get the onadata url and the master token
+        onadata = Onadata(settings.ONADATA_URL, settings.ONADATA_MASTER)
+        onadata.register_new_profile(user_details)
+
+        # update the list with the new user
+        self.create_updated_selects()
+
+        # send an email that the account has been activated
+        email_settings = {
+            'template': 'emails/general-email.html',
+            'subject': '[%s] Account Activated' % settings.SITE_NAME,
+            'sender_email': settings.SENDER_EMAIL,
+            'recipient_email': user.email,
+            'title': 'Account Activated',
+            'message': 'Thank you for confirming your email. Your account at %s is now active.' % settings.SITE_NAME,
+        }
+        notify = Notification()
+        notify.send_email(email_settings)
+        # @todo, if the user is using the default password, send the user to the password setting page
+        return {'message': 'Thank you for your email confirmation. Now you can login your account.', 'username': user.email}
+    
+    except User.DoesNotExist as e:
+        if settings.DEBUG: terminal.tprint(str(e), 'fail')
+        sentry.captureException()
+        return {'error': 'The specified user doesnt exist'}
+
+    except InvalidToken as e:
+        if settings.DEBUG: terminal.tprint(str(e), 'fail')
+        sentry.captureException()
+        return {'error': 'Activation link is invalid!'}
 
 
 def get_or_create_csrf_token(request):
