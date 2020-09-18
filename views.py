@@ -117,6 +117,86 @@ def landing_page(request):
     return render(request, 'azizi_amp.html')
 
 
+def update_password(request, encoded_user_email, password, token=None):
+    try:
+        User = get_user_model()
+        u_email = force_text(urlsafe_base64_decode(encoded_user_email))
+        user = User.objects.get(email=u_email)
+
+        # if we have a token, ensure that it is the correct token
+        if token:
+            if not account_activation_token.check_token(user, token):
+                raise Exception('Invalid token')
+        
+        user.password = make_password(password)
+        user.save()
+
+        # send an email that the account has been activated
+        email_settings = {
+            'template': 'emails/general-email.html',
+            'subject': '[%s] Password Updated' % settings.SITE_NAME,
+            'sender_email': settings.SENDER_EMAIL,
+            'recipient_email': user.email,
+            'title': 'Password Updated',
+            'message': 'Dear %s,<br /><p>You have successfully updated your password to the %s. You can now log in using your new password.</p>' % (user.first_name, settings.SITE_NAME),
+        }
+        notify = Notification()
+        notify.send_email(email_settings)
+
+        # now login the user
+        authenticate(username=user.username, password=password)
+
+        return {'message': 'You have reset your account password successfully.', 'username': user.username}
+
+    except Exception as e:
+        if settings.DEBUG: terminal.tprint(str(e), 'fail')
+        sentry.captureException()
+        raise
+
+
+def activate_user(request, user, token):
+    try:
+        User = get_user_model()
+        uid = force_text(urlsafe_base64_decode(user))
+        user = User.objects.get(pk=uid)
+
+        activation_view = ActivationView()
+        activation_view.validate_key(token)
+
+        user.is_active = True
+        user.save()
+
+        # send an email that the account has been activated
+        email_settings = {
+            'template': 'emails/general-email.html',
+            'subject': '[%s] Account Activated' % settings.SITE_NAME,
+            'sender_email': settings.SENDER_EMAIL,
+            'recipient_email': user.email,
+            'title': 'Account Activated',
+            'message': 'Thank you for confirming your email. Your account at %s is now active.' % settings.SITE_NAME,
+        }
+        notify = Notification()
+        notify.send_email(email_settings)
+        
+        uid = urlsafe_base64_encode(force_bytes(user.email))
+        return HttpResponseRedirect(reverse('new_user_password', kwargs={'uid': uid}))
+    
+    except ActivationError as e:
+        if settings.DEBUG: terminal.tprint(str(e), 'fail')
+        sentry.captureException()
+        return reverse('home', kwargs={'error': True, 'message': e.message})
+
+    except User.DoesNotExist as e:
+        if settings.DEBUG: terminal.tprint(str(e), 'fail')
+        sentry.captureException()
+        return reverse('home', kwargs={'error': True, 'message': 'The specified user doesnt exist' })
+
+    except Exception as e:
+        if settings.DEBUG: terminal.tprint(str(e), 'fail')
+        sentry.captureException()
+        return reverse('home', kwargs={'error': True, 'message': 'There was an error while activating your account. Contact the system administrator' })
+
+
 # @login_required(login_url='/login')
 def download_page(request):
     csrf_token = get_or_create_csrf_token(request)
@@ -373,86 +453,6 @@ def add_user(request):
         if settings.DEBUG: terminal.tprint(str(e), 'fail')
         sentry_ce()
         raise
-
-
-def update_password(request, encoded_user_email, password, token=None):
-    try:
-        User = get_user_model()
-        u_email = force_text(urlsafe_base64_decode(encoded_user_email))
-        user = User.objects.get(email=u_email)
-
-        # if we have a token, ensure that it is the correct token
-        if token:
-            if not account_activation_token.check_token(user, token):
-                raise Exception('Invalid token')
-        
-        user.password = make_password(password)
-        user.save()
-
-        # send an email that the account has been activated
-        email_settings = {
-            'template': 'emails/general-email.html',
-            'subject': '[%s] Password Updated' % settings.SITE_NAME,
-            'sender_email': settings.SENDER_EMAIL,
-            'recipient_email': user.email,
-            'title': 'Password Updated',
-            'message': 'Dear %s,<br /><p>You have successfully updated your password to the %s. You can now log in using your new password.</p>' % (user.first_name, settings.SITE_NAME),
-        }
-        notify = Notification()
-        notify.send_email(email_settings)
-
-        # now login the user
-        authenticate(username=user.username, password=password)
-
-        return {'message': 'You have reset your account password successfully.', 'username': user.username}
-
-    except Exception as e:
-        if settings.DEBUG: terminal.tprint(str(e), 'fail')
-        sentry.captureException()
-        raise
-
-
-def activate_user(request, user, token):
-    try:
-        User = get_user_model()
-        uid = force_text(urlsafe_base64_decode(user))
-        user = User.objects.get(pk=uid)
-
-        activation_view = ActivationView()
-        activation_view.validate_key(token)
-
-        user.is_active = True
-        user.save()
-
-        # send an email that the account has been activated
-        email_settings = {
-            'template': 'emails/general-email.html',
-            'subject': '[%s] Account Activated' % settings.SITE_NAME,
-            'sender_email': settings.SENDER_EMAIL,
-            'recipient_email': user.email,
-            'title': 'Account Activated',
-            'message': 'Thank you for confirming your email. Your account at %s is now active.' % settings.SITE_NAME,
-        }
-        notify = Notification()
-        notify.send_email(email_settings)
-        
-        uid = urlsafe_base64_encode(force_bytes(user.email))
-        return HttpResponseRedirect(reverse('new_user_password', kwargs={'uid': uid}))
-    
-    except ActivationError as e:
-        if settings.DEBUG: terminal.tprint(str(e), 'fail')
-        sentry.captureException()
-        return reverse('home', kwargs={'error': True, 'message': e.message})
-
-    except User.DoesNotExist as e:
-        if settings.DEBUG: terminal.tprint(str(e), 'fail')
-        sentry.captureException()
-        return reverse('home', kwargs={'error': True, 'message': 'The specified user doesnt exist' })
-
-    except Exception as e:
-        if settings.DEBUG: terminal.tprint(str(e), 'fail')
-        sentry.captureException()
-        return reverse('home', kwargs={'error': True, 'message': 'There was an error while activating your account. Contact the system administrator' })
 
 
 def get_or_create_csrf_token(request):
