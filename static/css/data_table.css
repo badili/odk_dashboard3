@@ -354,3 +354,4 @@ div.table-responsive>div.dataTables_wrapper>div.row>div[class^="col-"]:last-chil
 
 .mdl-data-table td{padding:0px 1px;}
 .mdl-data-table td, .mdl-data-table th{text-align:left;}
+.portlet-body{ overflow: auto; }
