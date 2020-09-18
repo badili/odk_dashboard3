@@ -14,7 +14,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.hashers import make_password
 from django.contrib.sites.shortcuts import get_current_site
 from django.core.exceptions import ValidationError
-from django.http.response import HttpResponse
+from django.http.response import HttpResponse, HttpResponseRedirect
 from django.shortcuts import render, redirect
 from django.middleware import csrf
 from django_registration.exceptions import ActivationError
@@ -22,6 +22,7 @@ from django_registration.backends.activation.views import RegistrationView, Acti
 from django.utils import six, timezone
 from django.utils.encoding import force_bytes, force_text
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.urls import reverse
 
 from wsgiref.util import FileWrapper
 
@@ -374,10 +375,11 @@ def add_user(request):
         raise
 
 
-def update_password(request, user, password, token=None):
+def update_password(request, encoded_user_email, password, token=None):
     try:
-        uid = force_text(urlsafe_base64_decode(user))
-        user = Personnel.objects.get(pk=uid)
+        User = get_user_model()
+        u_email = force_text(urlsafe_base64_decode(encoded_user_email))
+        user = User.objects.get(email=u_email)
 
         # if we have a token, ensure that it is the correct token
         if token:
@@ -386,8 +388,6 @@ def update_password(request, user, password, token=None):
         
         user.password = make_password(password)
         user.save()
-
-        # update the new password to the ODK account
 
         # send an email that the account has been activated
         email_settings = {
@@ -400,10 +400,12 @@ def update_password(request, user, password, token=None):
         }
         notify = Notification()
         notify.send_email(email_settings)
-        # @todo, if the user is using the default password, send the user to the password setting page
-        return {'message': 'Thank you for your email confirmation. Now you can login your account.', 'username': user.email}
 
-        return {'username': user.username, 'pass': password}
+        # now login the user
+        authenticate(username=user.username, password=password)
+
+        return {'message': 'You have reset your account password successfully.', 'username': user.username}
+
     except Exception as e:
         if settings.DEBUG: terminal.tprint(str(e), 'fail')
         sentry.captureException()
@@ -433,23 +435,24 @@ def activate_user(request, user, token):
         }
         notify = Notification()
         notify.send_email(email_settings)
-        # @todo, if the user is using the default password, send the user to the password setting page
-        return redirect('/login', request=request, kwargs={'message': 'Thank you for your email confirmation. Now you can login your account.', 'username': user.email})
+        
+        uid = urlsafe_base64_encode(force_bytes(user.email))
+        return HttpResponseRedirect(reverse('new_user_password', kwargs={'uid': uid}))
     
     except ActivationError as e:
         if settings.DEBUG: terminal.tprint(str(e), 'fail')
         sentry.captureException()
-        return redirect('/', request=request, kwargs={'error': True, 'message': e.message})
+        return reverse('home', kwargs={'error': True, 'message': e.message})
 
     except User.DoesNotExist as e:
         if settings.DEBUG: terminal.tprint(str(e), 'fail')
         sentry.captureException()
-        return redirect('/', request=request, kwargs={'error': True, 'message': 'The specified user doesnt exist' })
+        return reverse('home', kwargs={'error': True, 'message': 'The specified user doesnt exist' })
 
     except Exception as e:
         if settings.DEBUG: terminal.tprint(str(e), 'fail')
         sentry.captureException()
-        return redirect('/', request=request, kwargs={'error': True, 'message': 'There was an error while activating your account. Contact the system administrator' })
+        return reverse('home', kwargs={'error': True, 'message': 'There was an error while activating your account. Contact the system administrator' })
 
 
 def get_or_create_csrf_token(request):
