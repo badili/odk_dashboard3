@@ -8,6 +8,7 @@ function BadiliDash() {
     this.d3_width = 900;
     this.d3_height = 300;
     this.default_zoom = {minZoom: 6, maxZoom: 24};
+    this.objects = function(){};
 
     $.ajaxSetup({
       beforeSend: function(xhr, settings) {
@@ -202,7 +203,7 @@ BadiliDash.prototype.formStructure = function (form_id) {
                 // console.log(data);
                 dash.curFormStructure = data.structure;
                 console.log(window.location.pathname);
-                if(window.location.pathname == '/download/'){
+                if(window.location.pathname == '/download/' || window.location.pathname == '/download'){
                     dash.initiateFormStructureTree();
                 }
                 else{
@@ -1667,6 +1668,124 @@ BadiliDash.prototype.refreshViewData = function(){
         }
     });
 };
+
+// BUTTON ACTIONS MANAGEMENT
+BadiliDash.prototype.editObjects = function(event){
+    var button = event.relatedTarget == null ? event.target : event.relatedTarget;
+    dash.objects.cur_action = $(button).data('action');
+    dash.objects.cur_object = $(button).data('object_type');
+    dash.objects.cur_modal = undefined;
+
+    // update the modal with what we are doing
+    $('#newObject .modal-title').html(sprintf('%s a new %s', dash.objects.cur_action.toProperCase(), dash.objects.cur_object));
+    $('#newObject .object_label').html(sprintf('%s name', dash.objects.cur_object.toProperCase()));
+    $('#newObject .confirm_save').html(sprintf('Save %s', dash.objects.cur_object.toProperCase()));
+
+    if(dash.objects.cur_action == 'edit'){
+        dash.objects.cur_row = dash.objects.button_settings[dash.objects.cur_object]['table'].row('#'+$(button).data('row-id')).data();
+        $('[name=object_name]').val(dash.objects.cur_row['name']);
+    }
+    else{
+        $('[name=object_name]').val('');
+    }
+
+    dash.objects.cur_modal = 'newObject';
+    $('#newObject').modal();
+};
+
+BadiliDash.prototype.initiateObjectManagement = function(){
+    $('#confirmModal').on('show.bs.modal', function (event) {
+        var button = event.relatedTarget;
+        if(button != undefined){
+            dash.objects.cur_object = $(button).data('object_type');
+            dash.objects.cur_action = $(button).data('action');
+            $('#confirm').data('object_id', $(button).data('row-id'));
+            dash.objects.ajax_data = {'object_id': $(button).data('row-id')};
+        }
+
+        // change the modal message
+        $('#modal_title').html('Confirm '+ dash.objects.cur_action +'!');
+        var modal_message = 'Are you sure you want to <strong>'+ dash.objects.cur_action +'</strong> this <strong>'+ dash.objects.cur_object +'</strong>. ';
+        if(dash.objects.cur_action == 'delete'){
+            modal_message += 'This action is not reversible.';
+        }
+
+        if(dash.objects.button_settings[dash.objects.cur_object]['is_long_process']){
+            modal_message += "<br /><br />This will take a few seconds as we save the changes and update the data collection app...";
+        }
+
+        $('#modal_message').html(modal_message);
+        $('#confirm').html(dash.objects.cur_action);
+    });
+
+    $('#confirm').on('click', function () {
+        if(dash.objects.cur_object == 'elisa_results'){
+            $('#'+dash.objects.button_settings[dash.objects.cur_object]['form']).submit();
+            return true;
+        }
+
+        // formulate the url
+        var url = '/' + dash.objects.cur_action + dash.objects.button_settings[dash.objects.cur_object]['url'];
+        dash.objects.refresh_table = dash.objects.button_settings[dash.objects.cur_object]['table'];
+        dash.showProcessing();
+        $.ajax({
+            type: "POST", url: url, dataType: 'json', data: dash.objects.ajax_data,
+            error: dash.communicationError,
+            success: function (data) {
+                dash.endShowProcessing();
+                if (data.error) {
+                    $.notify({message: data.message}, {type: 'danger'});
+                    $('#confirmModal').modal('hide');
+                    return;
+                } else {
+                    var message = data.message == undefined ? dash.objects.button_settings[dash.objects.cur_object]['success_message'] : data.message;
+                    $.notify({message: message}, {type: 'success'});
+                    $('#confirmModal').modal('hide');
+                    $('.modal-backdrop').remove();
+                    $('.modal-backdrop').remove();
+                    $('#'+dash.objects.cur_modal).modal('hide');
+                    // we might need to update the pre-requisite table
+                    dash.objects.button_settings[dash.objects.cur_object]['table'].ajax.reload();
+                    $('[name='+ dash.objects.button_settings[dash.objects.cur_object]['form'] +']').trigger("reset");
+                    dash.objects.cur_action = undefined;
+                }
+            }
+        });
+    });
+};
+
+BadiliDash.prototype.confirmSave = function(event){
+    form2validate = $('[name='+ dash.objects.button_settings[dash.objects.cur_object]['form'] +']');
+
+    // dash.objects.newsch_validator = form2validate.validate();
+    isValid = false;
+    isValid = form2validate.valid();
+    console.log(isValid);
+    
+    if( isValid ){
+        dash.objects.refresh_table = dash.objects.button_settings[dash.objects.cur_object]['table'];
+        
+        // if we are editing, add the object id
+        dash.objects.ajax_data = objectifyForm(form2validate.serializeArray());
+        if(dash.objects.cur_action != 'add'){
+            dash.objects.ajax_data['object_id'] = dash.objects.cur_row['pk_id'];
+        }
+        $('#confirmModal').modal();
+    }
+    else{
+        dash.objects.first_modal = undefined;
+    }
+};
+
+BadiliDash.prototype.endShowProcessing = function(){
+    $('#overlay, .cssload-loader').css('display', 'none');
+};
+
+BadiliDash.prototype.showProcessing = function(){
+    $('#overlay, .cssload-loader').css('display', 'flex');
+};
+
+// END OF BUTTON ACTIONS MANAGEMENT
 
 var dash = new BadiliDash();
 
