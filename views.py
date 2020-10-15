@@ -308,6 +308,7 @@ def download_data(request):
     parser = OdkParser(None, None, settings.ONADATA_TOKEN)
     is_first_login = parser.is_first_login()
     are_ona_settings_saved = parser.are_ona_settings_saved()
+    
     if is_first_login is True or are_ona_settings_saved is False:
         return system_settings(request)
 
@@ -315,7 +316,8 @@ def download_data(request):
         data = json.loads(request.body)
         # form_id, nodes, d_format, download_type, view_name, uuids=None, update_local_data=True, is_dry_run=True
         # data['filter'] = {}
-        res = parser.fetch_merge_data(data['form_id'], data['nodes[]'], data['format'], data['action'], data['view_name'], None, True, settings.IS_DRY_RUN, data['filter_by'])
+        filters = data['filter_by'] if 'filter_by' in data else None
+        res = parser.fetch_merge_data(data['form_id'], data['nodes[]'], data['format'], data['action'], data['view_name'], None, True, settings.IS_DRY_RUN, filters)
     except KeyError as e:
         terminal.tprint(traceback.format_exc(), 'fail')
         terminal.tprint(str(e), 'fail')
