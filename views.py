@@ -36,13 +36,26 @@ from sentry_sdk import init as sentry_init, capture_exception as sentry_ce
 
 terminal = Terminal()
 
-class TokenGenerator(PasswordResetTokenGenerator):
+
+class CustomPasswordResetTokenGenerator(PasswordResetTokenGenerator):
+    """Custom Password Token Generator Class."""
     def _make_hash_value(self, user, timestamp):
-        return  six.text_type(user.pk) + six.text_type(timestamp) + six.text_type(user.username)
-account_activation_token = TokenGenerator()
+        # Include user email alongside user password to the generated token
+        # as the user state object that might change after a password reset
+        # to produce a token that invalidated.
+        login_timestamp = '' if user.last_login is None\
+            else user.last_login.replace(microsecond=0, tzinfo=None)
+        return str(user.pk) + user.password + user.email +\
+            str(login_timestamp) + str(timestamp)
+
+
+default_token_generator = CustomPasswordResetTokenGenerator()
+
 
 sentry = Client(settings.SENTRY_DSN, environment=settings.ENV_ROLE)
 sentry_init(settings.SENTRY_DSN, environment=settings.ENV_ROLE)
+
+User = get_user_model()
 
 
 def login_page(request, *args, **kwargs):
@@ -117,16 +130,11 @@ def landing_page(request):
     return render(request, 'azizi_amp.html')
 
 
-def update_password(request, encoded_user_email, password, token=None):
+def update_password(uid, password, token):
     try:
         User = get_user_model()
-        u_email = force_text(urlsafe_base64_decode(encoded_user_email))
-        user = User.objects.get(email=u_email)
-
-        # if we have a token, ensure that it is the correct token
-        if token:
-            if not account_activation_token.check_token(user, token):
-                raise Exception('Invalid token')
+        uuid = force_text(urlsafe_base64_decode(uid))
+        user = User.objects.get(id=uuid)
         
         user.password = make_password(password)
         user.save()
@@ -143,10 +151,7 @@ def update_password(request, encoded_user_email, password, token=None):
         notify = Notification()
         notify.send_email(email_settings)
 
-        # now login the user
-        authenticate(username=user.username, password=password)
-
-        return {'message': 'You have reset your account password successfully.', 'username': user.username}
+        return user.email
 
     except Exception as e:
         if settings.DEBUG: terminal.tprint(str(e), 'fail')
@@ -156,7 +161,6 @@ def update_password(request, encoded_user_email, password, token=None):
 
 def activate_user(request, user, token):
     try:
-        User = get_user_model()
         uid = force_text(urlsafe_base64_decode(user))
         user = User.objects.get(pk=uid)
 
@@ -195,6 +199,80 @@ def activate_user(request, user, token):
         if settings.DEBUG: terminal.tprint(str(e), 'fail')
         sentry.captureException()
         return reverse('home', kwargs={'error': True, 'message': 'There was an error while activating your account. Contact the system administrator' })
+
+
+def new_user_password(request, uid=None, token=None):
+    # the uid can be generated from a redirect when a user confirms their account
+    # if not set, the user will have set their email on a user page
+    current_site = get_current_site(request)
+    params = {'site_name': settings.SITE_NAME, 'page_title': settings.SITE_NAME}
+    
+    # the uid is actually an encoded email
+    try:
+        if uid and token:
+            # we have a user id and token, so we can present the new password page
+            params['token'] = token
+            params['user'] = uid
+            return render(request, 'new_password.html', params)
+        else:
+            # lets send an email with the reset link
+            user = User.objects.filter(email=request.POST.get('email')).get()
+            notify = Notification()
+            uid = urlsafe_base64_encode(force_bytes(user.pk))
+            token = default_token_generator.make_token(user)
+            email_settings = {
+                'template': 'emails/verify_account.html',
+                'subject': '[%s] Password Recovery Link' % settings.SITE_NAME,
+                'sender_email': settings.SENDER_EMAIL,
+                'recipient_email': user.email,
+                'title': 'Password Recovery Link',
+                'salutation': 'Dear %s' % user.first_name,
+                'verification_link': 'http://%s/new_user_password/%s/%s' % (current_site.domain, uid, token),
+                'message': 'Someone, hopefully you tried to reset their password on %s. Please click on the link below to reset your password.' % settings.SITE_NAME,
+                'message_sub_heading': 'Password Reset'
+            }
+            notify.send_email(email_settings)
+
+        return render(request, 'login.html', {'is_error': False, 'message': 'We have sent you a password recovery link to your email.'})
+
+    except User.DoesNotExist as e:
+        params['error'] = True
+        params['message'] = 'Sorry, but the specified user is not found in our system'
+        return render(request, 'recover_password.html', params)
+
+    except Exception as e:
+        if settings.DEBUG: print(str(e))
+        sentry.captureException()
+        return render(request, 'login.html', {'is_error': True, 'message': 'There was an error while saving the new password'})
+
+
+def save_user_password(request):
+    # save the user password and redirect to the dashboard page
+    try:
+        passwd = request.POST.get('pass')
+        repeat_passwd = request.POST.get('repeat_pass')
+
+        if passwd != repeat_passwd:
+            params['error'] = True
+            params['message'] = "Sorry! Your passwords don't match. Please try again"
+            params['token'] = request.POST.get('token')
+            return render(request, 'new_user_password.html', params)
+
+        u_data = dash_views.update_password(request, request.POST.get('token'), passwd)
+
+        # seems all is good, now login and return the dashboard
+        return dash_views.login_page(request, kwargs={'user': {'pass': passwd, 'username': u_data['username']}})
+    except Exception as e:
+        if settings.DEBUG: print(str(e))
+        return render(request, 'login.html', {'is_error': True, 'message': 'There was an error while saving the new password'})
+
+
+def recover_password(request):
+    current_site = get_current_site(request)
+    # the uid is actually an encoded email
+    params = {'site_name': settings.SITE_NAME, 'token': ''}
+
+    return render(request, 'recover_password.html', params)
 
 
 # @login_required(login_url='/login')

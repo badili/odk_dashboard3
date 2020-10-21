@@ -1670,6 +1670,15 @@ BadiliDash.prototype.refreshViewData = function(){
 };
 
 // BUTTON ACTIONS MANAGEMENT
+BadiliDash.prototype.initiateActionButtons = function(id_){
+    dash.objects.cur_modal = id_;
+    $('#'+id_).on('show.bs.modal', function (event) {
+        var button = event.relatedTarget;
+        dash.objects.cur_object = $(button).data('object_type');
+        dash.objects.cur_action = $(button).data('action');
+    });
+};
+
 BadiliDash.prototype.editObjects = function(event){
     var button = event.relatedTarget == null ? event.target : event.relatedTarget;
     dash.objects.cur_action = $(button).data('action');
@@ -1715,7 +1724,7 @@ BadiliDash.prototype.initiateObjectManagement = function(){
         }
 
         $('#modal_message').html(modal_message);
-        $('#confirm').html(dash.objects.cur_action);
+        $('#confirm').html(dash.objects.cur_action.toProperCase());
     });
 
     $('#confirm').on('click', function () {
@@ -1760,14 +1769,13 @@ BadiliDash.prototype.confirmSave = function(event){
     // dash.objects.newsch_validator = form2validate.validate();
     isValid = false;
     isValid = form2validate.valid();
-    console.log(isValid);
     
     if( isValid ){
         dash.objects.refresh_table = dash.objects.button_settings[dash.objects.cur_object]['table'];
         
         // if we are editing, add the object id
         dash.objects.ajax_data = objectifyForm(form2validate.serializeArray());
-        if(dash.objects.cur_action != 'add'){
+        if(dash.objects.cur_action != undefined && dash.objects.cur_action != 'add'){
             dash.objects.ajax_data['object_id'] = dash.objects.cur_row['pk_id'];
         }
         $('#confirmModal').modal();

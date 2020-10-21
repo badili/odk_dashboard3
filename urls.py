@@ -1,6 +1,5 @@
-
-
 from django.conf.urls import url
+from django.urls import include, path, re_path
 
 from odk_dashboard import views
 urlpatterns = [
@@ -41,6 +40,10 @@ urlpatterns = [
     url(r'^form_groups_info/$', views.form_groups_info, name='form_groups_info'),
     url(r'^save_group_details/$', views.save_group_details, name='save_group_details'),
     url(r'^refresh_view_data/$', views.refresh_view_data, name='refresh_view_data'),
+
+    # re_path(r'^save_user_password$', views.save_user_password, name='save_user_password'),
+    re_path(r'^new_user_password/?(?P<uid>[0-9A-Za-z_\-]+)?/?(?P<token>[0-9A-Za-z\-]+)?$', views.new_user_password, name='new_user_password'),
+    re_path(r'^recover_password$', views.recover_password, name='recover_password'),
 
     # user urls
 ]
