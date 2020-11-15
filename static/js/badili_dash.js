@@ -185,12 +185,12 @@ BadiliDash.prototype.formStructure = function (form_id) {
     var data = {'form_id': form_id};
     dash.cur_form_id = form_id;
 
-    $('#spinnermModal').modal('show');
+    dash.showLoadingSpinner('Refreshing the form structure');
     $.ajax({
         type: "POST", url: "/form_structure/", dataType: 'json', data: data,
         error: dash.communicationError,
         success: function (data) {
-            $('#spinnermModal').modal('hide');
+            dash.destroyLoadingSpinner();
             if (data.error) {
                 console.log(data.message);
                 swal({
@@ -313,6 +313,9 @@ BadiliDash.prototype.processButtonAction = function(event){
     if(this.id == 'refresh_btn'){
         console.log('Refreshing the forms from the server');
     }
+    else if(this.id == 'dict_btn'){
+        console.log('Downloading the dictionary from the server');
+    }
     else{
         if(dash.selected_node_ids === undefined){
             console.log('No forms defined...');
@@ -334,7 +337,7 @@ BadiliDash.prototype.processButtonAction = function(event){
         }
     }
 
-    var action = undefined, data = undefined;
+    var action = undefined, data = undefined, loading_text = 'Loading...';
     dash.sel_form = $("#all_forms").jqxComboBox('getSelectedItem');
 
     switch(this.id){
@@ -345,10 +348,17 @@ BadiliDash.prototype.processButtonAction = function(event){
 
         case 'update_btn':
             action = '/update_db_struct/';
+            loading_text = 'Updating DB structure...';
         break;
 
         case 'refresh_btn':
             action = '/refresh_forms/';
+            loading_text = 'Refreshing forms...';
+        break;
+
+        case 'dict_btn':
+            dash.downloadData('get_dict/', '', '/get_dict/', 'AnGR-CIM Dictionary');
+            return;
         break;
 
         case 'delete_btn':
@@ -356,12 +366,12 @@ BadiliDash.prototype.processButtonAction = function(event){
         break;
     };
 
-    $('#spinnerModal').modal('show');
+    dash.showLoadingSpinner(loading_text);
     $.ajax({
         type: "POST", url: action, dataType: 'json', data: data,
         error: dash.communicationError,
         success: function (data) {
-            $('#spinnerModal').modal('hide');
+            dash.destroyLoadingSpinner();
             if (data.error) {
                 Notification.show({create: true, hide: true, updateText: false, text: 'There was an error while communicating with the server', error: true});
                 return;
@@ -406,10 +416,9 @@ BadiliDash.prototype.processDownloadChoice = function(){
  * @param {string}  view_name   The name of the view that the user wants to save
  * @return {none}
  */
-BadiliDash.prototype.downloadData = function(user_action, view_name){
-    var action = '/get_data/';
+BadiliDash.prototype.downloadData = function(user_action, view_name, action='/get_data/', filename=undefined){
     view_name = (view_name == undefined) ? '' : view_name;
-    var data = {'nodes[]': dash.selected_node_ids, action: user_action, 'form_id': dash.sel_form.value, 'format': 'xlsx', 'view_name': view_name};
+    var data = {'nodes[]': dash.selected_node_ids, action: user_action, 'form_id': dash.sel_form.value, 'format': 'xlsx', 'view_name': view_name, 'filter_by': dash.data.filter_by};
 
     var xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
@@ -420,7 +429,7 @@ BadiliDash.prototype.downloadData = function(user_action, view_name){
                 var reader = new FileReader();
                 reader.onload = function() {
                     var response = JSON.parse(reader.result);
-                    $('#spinnerModal').modal('hide');
+                    dash.destroyLoadingSpinner();
                     swal({
                       title: "Error!",
                       text: response.message,
@@ -435,23 +444,28 @@ BadiliDash.prototype.downloadData = function(user_action, view_name){
             // Trick for making downloadable link
             a = document.createElement('a');
             a.href = window.URL.createObjectURL(xhttp.response);
-            // Give filename you wish to download
-            var d = new Date();
+            if(filename == undefined){
+                // Give filename you wish to download
+                var d = new Date();
 
-            var datestring =
-                  d.getFullYear() + ("0"+(d.getMonth()+1)).slice(-2) + ("0" + d.getDate()).slice(-2)
-                  + "_" +
-                  ("0" + d.getHours()).slice(-2) + ("0" + d.getMinutes()).slice(-2) + ("0" + d.getSeconds()).slice(-2);
+                var datestring =
+                      d.getFullYear() + ("0"+(d.getMonth()+1)).slice(-2) + ("0" + d.getDate()).slice(-2)
+                      + "_" +
+                      ("0" + d.getHours()).slice(-2) + ("0" + d.getMinutes()).slice(-2) + ("0" + d.getSeconds()).slice(-2);
 
-            a.download = 'Form'+ dash.sel_form.value + '_'+ datestring + '.xlsx';
+                a.download = 'Form'+ dash.sel_form.value + '_'+ datestring + '.xlsx';
+            }
+            else{
+                a.download = filename +'.xlsx'
+            }
             a.style.display = 'none';
             document.body.appendChild(a);
-            $('#spinnerModal').modal('hide');
+            dash.destroyLoadingSpinner();
             a.click();
         }
     };
 
-    $('#spinnerModal').modal('show');
+    dash.showLoadingSpinner('Please wait while we process your data for download...');
     // Post data to URL which handles post request
     xhttp.open("POST", action);
     xhttp.setRequestHeader("X-CSRFToken", dash.csrftoken);
@@ -553,12 +567,12 @@ BadiliDash.prototype.initiateViewsManagement = function(){
                 if (confirm('Are you sure you want to delete this view?')){
                     console.log('Deleting a row');
                     data = {'view_id': row.value.view_id}
-                    $('#spinnermModal').modal('show');
+                    dash.showLoadingSpinner('Please wait while we initiate the views...');
                     $.ajax({
                         type: "POST", url: "/delete_view/", dataType: 'json', data: {'view': JSON.stringify(data)},
                         error: dash.communicationError,
                         success: function (data) {
-                            $('#spinnermModal').modal('hide');
+                            dash.destroyLoadingSpinner();
                             if (data.error) {
                                 console.log(data.message);
                                 swal({
@@ -601,12 +615,12 @@ BadiliDash.prototype.submitViewEdits = function(e){
             auto_process: $editor.find('#auto_process').val()
         };
 
-    $('#spinnermModal').modal('show');
+    dash.showLoadingSpinner('Please wait while we save your changes...');
     $.ajax({
         type: "POST", url: "/edit_view/", dataType: 'json', data: {'view': JSON.stringify(values)},
         error: dash.communicationError,
         success: function (data) {
-            $('#spinnermModal').modal('hide');
+            dash.destroyLoadingSpinner();
             if (data.error) {
                 console.log(data.message);
                 swal({
@@ -695,7 +709,7 @@ BadiliDash.prototype.showNotification = function(message, type, autoclose){
 };
 
 BadiliDash.prototype.communicationError = function(){
-    $('#spinnerModal').modal('hide');
+    dash.destroyLoadingSpinner();
 };
 
 /**
@@ -772,7 +786,7 @@ BadiliDash.prototype.finalizeMapping = function(dragItem, dropItem, a, position,
         type: "POST", url: "/create_mapping/", dataType: 'json', data: JSON.stringify(s_data),
         error: dash.communicationError,
         success: function (data) {
-            $('#spinnermModal').modal('hide');
+            dash.destroyLoadingSpinner();
             if (data.error) {
                 swal({
                   title: "Error!",
@@ -857,12 +871,12 @@ BadiliDash.prototype.submitMappingEdits = function(e){
             is_lookup_id: $editor.find('[name=is_lookup_id]:checked').val() == 'yes' ? true : false
         };
 
-    $('#spinnermModal').modal('show');
+    dash.showLoadingSpinner('Please wait while we save your changes...');
     $.ajax({
         type: "POST", url: "/edit_mapping/", dataType: 'json', data: {'mapping': JSON.stringify(values)},
         error: dash.communicationError,
         success: function (data) {
-            $('#spinnermModal').modal('hide');
+            dash.destroyLoadingSpinner();
             if (data.error) {
                 dash.showNotification(data.message, 'danger', true);
                 return;
@@ -878,12 +892,12 @@ BadiliDash.prototype.submitMappingEdits = function(e){
 BadiliDash.prototype.deleteMapping = function(row){
     if (confirm('Are you sure you want to delete this mapping?')){
         data = {'mapping_id': row.value.mapping_id}
-        $('#spinnermModal').modal('show');
+        dash.showLoadingSpinner('Please wait while we delete the mappings...');
         $.ajax({
             type: "POST", url: "/delete_mapping/", dataType: 'json', data: {'mappings': JSON.stringify(data)},
             error: dash.communicationError,
             success: function (data) {
-                $('#spinnermModal').modal('hide');
+                dash.destroyLoadingSpinner();
                 if (data.error) {
                     swal({
                       title: "Error!",
@@ -923,12 +937,12 @@ BadiliDash.prototype.jqxRecursion = function (objects, element_id) {
 };
 
 BadiliDash.prototype.validateMappings = function(){
-    $('#spinnermModal').modal('show');
+    dash.showLoadingSpinner('Please wait while we validate your mappings...');
     $.ajax({
         type: "POST", url: "/validate_mappings/", dataType: 'json', data: {},
         error: dash.communicationError,
         success: function (data) {
-            $('#spinnermModal').modal('hide');
+            dash.destroyLoadingSpinner();
             if (data.error) {
                 console.log(data.message);
                 swal({
@@ -967,12 +981,12 @@ BadiliDash.prototype.initiateManageMappings = function(){
 };
 
 BadiliDash.prototype.clearMappings = function(){
-    $('#spinnermModal').modal('show');
+    dash.showLoadingSpinner('Please wait while we delete the mappings...');
     $.ajax({
         type: "POST", url: "/clear_mappings/", dataType: 'json',
         error: dash.communicationError,
         success: function (data) {
-            $('#spinnermModal').modal('hide');
+            dash.destroyLoadingSpinner();
             $('#clearMappingsModal').modal('hide');
             if (data.error) {
                 swal({
@@ -1006,7 +1020,7 @@ BadiliDash.prototype.executeProcessingDryRun = function(is_dry_run=true){
             return;
         }
     }
-    $('#spinnermModal').modal('show');
+    dash.showLoadingSpinner('Please wait while we test the dry run...');
     if(is_dry_run == false){
         $('#clearMappingsModal').modal('hide');
         $('#processMappingsModal').modal('hide');
@@ -1015,7 +1029,7 @@ BadiliDash.prototype.executeProcessingDryRun = function(is_dry_run=true){
         type: "POST", url: "/manual_data_process/", dataType: 'json', data: {'is_dry_run': is_dry_run},
         error: dash.communicationError,
         success: function (data) {
-            $('#spinnermModal').modal('hide');
+            dash.destroyLoadingSpinner();
             $('#clearMappingsModal').modal('hide');
             $('#processMappingsModal').modal('hide');
 
@@ -1038,12 +1052,12 @@ BadiliDash.prototype.executeProcessingDryRun = function(is_dry_run=true){
 };
 
 BadiliDash.prototype.clearProcessedData = function(){
-    $('#spinnermModal').modal('show');
+    dash.showLoadingSpinner('Please wait while we clear the processed data...');
     $.ajax({
         type: "POST", url: "/delete_processed_data/", dataType: 'json',
         error: dash.communicationError,
         success: function (data) {
-            $('#spinnermModal').modal('hide');
+            dash.destroyLoadingSpinner();
             $('#deleteDataModal').modal('hide');
             if (data.error) {
                 message = dash.formatErrorMessages(data.comments);
@@ -1090,12 +1104,12 @@ BadiliDash.prototype.initiateProcessingErrorsPage = function(){
 BadiliDash.prototype.viewRawSubmission = function(){
     var rec_id = $(this).data("identifier");
     dash.cur_error_id = rec_id;
-    $('#spinnermModal').modal('show');
+    dash.showLoadingSpinner('Please wait while we fetch the raw submission...');
     $.ajax({
         type: "POST", url: "/fetch_single_error/", dataType: 'json', data: {'err_id': rec_id},
         error: dash.communicationError,
         success: function (data) {
-            $('#spinnermModal').modal('hide');
+            dash.destroyLoadingSpinner();
             if (data.error) {
                 dash.showNotification('The data truncation process failed', 'error', true);
             } else {
@@ -1189,7 +1203,7 @@ BadiliDash.prototype.initiateMap = function(lat, lon, zoom, include_overlay = tr
 };
 
 BadiliDash.prototype.loadFirstLevel = function(c_code){
-    $('#spinnermModal').modal('show');
+    dash.showLoadingSpinner('Please wait while we load the first level...');
     $.get('/first_level_geojson?c_code='+c_code, function(response){
         // console.log(response);
         dash.layersData = [];
@@ -1208,7 +1222,7 @@ BadiliDash.prototype.loadFirstLevel = function(c_code){
                 dash.updateInfoDiv(None);
             });
         });
-        $('#spinnermModal').modal('hide');
+        dash.destroyLoadingSpinner();
     });
 };
 
@@ -1226,12 +1240,12 @@ BadiliDash.prototype.initiateMapVisualization = function(center_lat, center_lon,
 BadiliDash.prototype.saveEditedJson = function(){
     var edited_json = dash.json_editor.getValue();
 
-    $('#spinnermModal').modal('show');
+    dash.showLoadingSpinner('Please wait while we save your changes...');
     $.ajax({
         type: "POST", url: "/save_json_edits/", dataType: 'json', data: {'err_id': dash.cur_error_id, 'json_data': JSON.stringify(edited_json)},
         error: dash.communicationError,
         success: function (data) {
-            $('#spinnermModal').modal('hide');
+            dash.destroyLoadingSpinner();
             $('#saveRawDataEditsModal').modal('hide');
             if (data.error) {
                 dash.showNotification('There was an error while saving the edits. Please contact the system administrator!', 'error', true);
@@ -1243,12 +1257,12 @@ BadiliDash.prototype.saveEditedJson = function(){
 };
 
 BadiliDash.prototype.processCurSubmission = function(){
-    $('#spinnermModal').modal('show');
+    dash.showLoadingSpinner('Please wait while we process the submission..');
     $.ajax({
         type: "POST", url: "/process_single_submission/", dataType: 'json', data: {'err_id': dash.cur_error_id},
         error: dash.communicationError,
         success: function (data) {
-            $('#spinnermModal').modal('hide');
+            dash.destroyLoadingSpinner();
             $('#processSingleSubmission').modal('hide');
             if (data.error) {
                 var mssg = sprintf('There was an error while processing the submission.<br />%s<br />Please contact the system administrator!', data.message);
@@ -1481,12 +1495,12 @@ BadiliDash.prototype.refreshODKFormsTable = function(data){
 
 BadiliDash.prototype.editFormSettings = function(){
     var form_id = $(this).data('form_id');
-    $('#spinnermModal').modal('show');
+    dash.showLoadingSpinner('Please wait while we fetch the form details...');
     $.ajax({
         type: "POST", url: "/fetch_form_details/", dataType: 'json', data: {'form_id': form_id},
         error: dash.communicationError,
         success: function (data) {
-            $('#spinnermModal').modal('hide');
+            dash.destroyLoadingSpinner();
             if (data.error) {
                 dash.showNotification('There was an error while fetching form details.', 'error', true);
             } else {
@@ -1529,12 +1543,12 @@ BadiliDash.prototype.saveFormSettings = function(event){
     event.preventDefault();
     // get all the settings
     var form_details = $('#form_details_editor').serializeArray();
-    $('#spinnermModal').modal('show');
+    dash.showLoadingSpinner('Please wait while we save the form details...');
     $.ajax({
         type: "POST", url: "/save_form_details/", dataType: 'json', data: form_details,
         error: dash.communicationError,
         success: function (data) {
-            $('#spinnermModal').modal('hide');
+            dash.destroyLoadingSpinner();
             if (data.error) {
                 dash.showNotification('There was an error while saving the form details.', 'error', true);
             } else {
@@ -1669,6 +1683,25 @@ BadiliDash.prototype.refreshViewData = function(){
     });
 };
 
+BadiliDash.prototype.showLoadingSpinner = function(loading_text='Loading...'){
+    if (typeof $('body').loadingModal === "function") {
+        $('body').loadingModal({
+          position: 'auto',
+          text: loading_text,
+          color: '#fff',
+          opacity: '0.7',
+          backgroundColor: 'rgb(0,0,0)',
+          animation: 'cubeGrid'
+        });
+    }
+};
+
+BadiliDash.prototype.destroyLoadingSpinner = function(){
+    if (typeof $('body').loadingModal === "function") {
+        $('body').loadingModal('destroy');
+    }
+};
+
 // BUTTON ACTIONS MANAGEMENT
 BadiliDash.prototype.initiateActionButtons = function(id_){
     dash.objects.cur_modal = id_;
@@ -1714,9 +1747,15 @@ BadiliDash.prototype.initiateObjectManagement = function(){
 
         // change the modal message
         $('#modal_title').html('Confirm '+ dash.objects.cur_action +'!');
-        var modal_message = 'Are you sure you want to <strong>'+ dash.objects.cur_action +'</strong> this <strong>'+ dash.objects.cur_object +'</strong>. ';
+        if(dash.objects.button_settings[dash.objects.cur_object]['modal_message'] == undefined){
+            var modal_message = 'Are you sure you want to <strong>'+ dash.objects.cur_action +'</strong> this <strong>'+ dash.objects.cur_object +'</strong>.';
+        }
+        else{
+            var modal_message = dash.objects.button_settings[dash.objects.cur_object]['modal_message'];
+        }
+        
         if(dash.objects.cur_action == 'delete'){
-            modal_message += 'This action is not reversible.';
+            modal_message += ' This action is not reversible.';
         }
 
         if(dash.objects.button_settings[dash.objects.cur_object]['is_long_process']){
@@ -1724,7 +1763,8 @@ BadiliDash.prototype.initiateObjectManagement = function(){
         }
 
         $('#modal_message').html(modal_message);
-        $('#confirm').html(dash.objects.cur_action.toProperCase());
+        var confirm_caption = dash.objects.button_settings[dash.objects.cur_object]['confirm_btn_caption'] == undefined ? dash.objects.cur_action : dash.objects.button_settings[dash.objects.cur_object]['confirm_btn_caption'];
+        $('#confirm').html(confirm_caption.toProperCase());
     });
 
     $('#confirm').on('click', function () {
@@ -1737,24 +1777,27 @@ BadiliDash.prototype.initiateObjectManagement = function(){
         var url = '/' + dash.objects.cur_action + dash.objects.button_settings[dash.objects.cur_object]['url'];
         dash.objects.refresh_table = dash.objects.button_settings[dash.objects.cur_object]['table'];
         dash.showProcessing();
+        ajax_type = dash.objects.button_settings[dash.objects.cur_object]['ajax_type'] == undefined ? "POST" : dash.objects.button_settings[dash.objects.cur_object]['ajax_type'];
         $.ajax({
-            type: "POST", url: url, dataType: 'json', data: dash.objects.ajax_data,
+            type: ajax_type, url: url, dataType: 'json', data: dash.objects.ajax_data,
             error: dash.communicationError,
             success: function (data) {
                 dash.endShowProcessing();
+                $('#confirmModal').modal('hide');
+                $('.modal-backdrop').remove();
+                $('.modal-backdrop').remove();
                 if (data.error) {
-                    $.notify({message: data.message}, {type: 'danger'});
-                    $('#confirmModal').modal('hide');
+                    if (typeof $.notify === "function"){ $.notify({message: data.message}, {type: 'danger'}); }
                     return;
                 } else {
                     var message = data.message == undefined ? dash.objects.button_settings[dash.objects.cur_object]['success_message'] : data.message;
-                    $.notify({message: message}, {type: 'success'});
-                    $('#confirmModal').modal('hide');
-                    $('.modal-backdrop').remove();
-                    $('.modal-backdrop').remove();
+                    if (typeof $.notify === "function"){ $.notify({message: message}, {type: 'success'}); }
                     $('#'+dash.objects.cur_modal).modal('hide');
+                    if(dash.objects.button_settings[dash.objects.cur_object]['redirect'] != undefined){
+                        window.location = dash.objects.button_settings[dash.objects.cur_object]['redirect'];
+                    }
                     // we might need to update the pre-requisite table
-                    dash.objects.button_settings[dash.objects.cur_object]['table'].ajax.reload();
+                    if(dash.objects.button_settings[dash.objects.cur_object]['table'] != undefined) { dash.objects.button_settings[dash.objects.cur_object]['table'].ajax.reload(); }
                     $('[name='+ dash.objects.button_settings[dash.objects.cur_object]['form'] +']').trigger("reset");
                     dash.objects.cur_action = undefined;
                 }

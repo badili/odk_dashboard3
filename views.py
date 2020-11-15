@@ -50,8 +50,6 @@ class CustomPasswordResetTokenGenerator(PasswordResetTokenGenerator):
 
 
 default_token_generator = CustomPasswordResetTokenGenerator()
-
-
 sentry = Client(settings.SENTRY_DSN, environment=settings.ENV_ROLE)
 sentry_init(settings.SENTRY_DSN, environment=settings.ENV_ROLE)
 
@@ -61,8 +59,6 @@ User = get_user_model()
 def login_page(request, *args, **kwargs):
     csrf_token = get_or_create_csrf_token(request)
     page_settings = {'page_title': "%s | Login Page" % settings.SITE_NAME, 'csrf_token': csrf_token}
-    if settings.DEBUG: print(kwargs)
-    if settings.DEBUG: print(args)
 
     try:
         # check if we have some username and password in kwargs
@@ -75,6 +71,9 @@ def login_page(request, *args, **kwargs):
             password = request.POST['pass']
 
         if username is not None:
+            if settings.DEBUG:
+                print(username)
+                print(password)
             user = authenticate(username=username, password=password)
 
             if user is None:
@@ -135,16 +134,17 @@ def update_password(uid, password, token):
         User = get_user_model()
         uuid = force_text(urlsafe_base64_decode(uid))
         user = User.objects.get(id=uuid)
-        
-        user.password = make_password(password)
-        user.save()
 
+        user.set_password(password)
+        user.save()
+        
         # send an email that the account has been activated
         email_settings = {
             'template': 'emails/general-email.html',
             'subject': '[%s] Password Updated' % settings.SITE_NAME,
             'sender_email': settings.SENDER_EMAIL,
             'recipient_email': user.email,
+            'use_queue': getattr(settings, 'QUEUE_EMAILS', False),
             'title': 'Password Updated',
             'message': 'Dear %s,<br /><p>You have successfully updated your password to the %s. You can now log in using your new password.</p>' % (user.first_name, settings.SITE_NAME),
         }
@@ -176,6 +176,7 @@ def activate_user(request, user, token):
             'subject': '[%s] Account Activated' % settings.SITE_NAME,
             'sender_email': settings.SENDER_EMAIL,
             'recipient_email': user.email,
+            'use_queue': getattr(settings, 'QUEUE_EMAILS', False),
             'title': 'Account Activated',
             'message': 'Thank you for confirming your email. Your account at %s is now active.' % settings.SITE_NAME,
         }
@@ -216,6 +217,7 @@ def new_user_password(request, uid=None, token=None):
             return render(request, 'new_password.html', params)
         else:
             # lets send an email with the reset link
+            print(request.POST.get('email'))
             user = User.objects.filter(email=request.POST.get('email')).get()
             notify = Notification()
             uid = urlsafe_base64_encode(force_bytes(user.pk))
@@ -227,6 +229,7 @@ def new_user_password(request, uid=None, token=None):
                 'recipient_email': user.email,
                 'title': 'Password Recovery Link',
                 'salutation': 'Dear %s' % user.first_name,
+                'use_queue': getattr(settings, 'QUEUE_EMAILS', False),
                 'verification_link': 'http://%s/new_user_password/%s/%s' % (current_site.domain, uid, token),
                 'message': 'Someone, hopefully you tried to reset their password on %s. Please click on the link below to reset your password.' % settings.SITE_NAME,
                 'message_sub_heading': 'Password Reset'
@@ -237,6 +240,7 @@ def new_user_password(request, uid=None, token=None):
 
     except User.DoesNotExist as e:
         params['error'] = True
+        sentry.captureException()
         params['message'] = 'Sorry, but the specified user is not found in our system'
         return render(request, 'recover_password.html', params)
 
@@ -519,6 +523,7 @@ def add_user(request):
             'site_url': 'http://%s' % current_site.domain,
             'title': 'Confirm Registration',
             'salutation': 'Dear %s' % first_name,
+            'use_queue': getattr(settings, 'QUEUE_EMAILS', False),
             'verification_link': 'http://%s/activate_new_user/%s/%s' % (current_site.domain, uid, activation_link),
             'message': 'You have been registered successfully to the %s. We are glad to have you on board. Please click on the button below to activate your account. You will not be able to use your account until it is activated. The activation link will expire in %d hours' % (settings.SITE_NAME, settings.ACCOUNT_ACTIVATION_DAYS * 24),
             'message_sub_heading': 'You have been registered successfully'
