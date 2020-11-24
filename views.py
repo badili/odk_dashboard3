@@ -59,6 +59,8 @@ User = get_user_model()
 def login_page(request, *args, **kwargs):
     csrf_token = get_or_create_csrf_token(request)
     page_settings = {'page_title': "%s | Login Page" % settings.SITE_NAME, 'csrf_token': csrf_token}
+    print(args)
+    print(kwargs)
 
     try:
         # check if we have some username and password in kwargs
@@ -69,6 +71,9 @@ def login_page(request, *args, **kwargs):
         else:
             username = request.POST['username']
             password = request.POST['pass']
+
+        if 'message' in kwargs:
+            page_settings['message'] = kwargs['message']
 
         if username is not None:
             if settings.DEBUG:
@@ -90,7 +95,7 @@ def login_page(request, *args, **kwargs):
     except KeyError as e:
         # ask the user to enter the username and/or password
         terminal.tprint('\nUsername/password not defined: %s' % str(e), 'warn')
-        page_settings['message'] = "Please enter your username and password"
+        page_settings['message'] = page_settings['message'] if 'message' in page_settings else "Please enter your username and password"
         return render(request, 'login.html', page_settings)
     except Profile.DoesNotExist as e:
         terminal.tprint(str(e), 'fail')
@@ -236,7 +241,7 @@ def new_user_password(request, uid=None, token=None):
             }
             notify.send_email(email_settings)
 
-        return render(request, 'login.html', {'is_error': False, 'message': 'We have sent you a password recovery link to your email.'})
+        return render(request, 'login.html', {'is_error': False, 'message': 'We have sent a password recovery link to your email.'})
 
     except User.DoesNotExist as e:
         params['error'] = True
@@ -265,7 +270,7 @@ def save_user_password(request):
         u_data = dash_views.update_password(request, request.POST.get('token'), passwd)
 
         # seems all is good, now login and return the dashboard
-        return dash_views.login_page(request, kwargs={'user': {'pass': passwd, 'username': u_data['username']}})
+        return dash_views.login_page(request, message='You have set a new password successfully. Please log in using the new password.', user={'pass': passwd, 'username': u_data['username']})
     except Exception as e:
         if settings.DEBUG: print(str(e))
         return render(request, 'login.html', {'is_error': True, 'message': 'There was an error while saving the new password'})
