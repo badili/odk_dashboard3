@@ -64,10 +64,10 @@ def login_page(request, *args, **kwargs):
 
     try:
         # check if we have some username and password in kwargs
-        if 'user' in kwargs:
+        if 'kwargs' in kwargs:
             # use the explicitly passed username and password over the form filled ones
-            username = kwargs['user']['username']
-            password = kwargs['user']['pass']
+            username = kwargs['kwards']['user']['username']
+            password = kwargs['kwards']['user']['pass']
         else:
             username = request.POST['username']
             password = request.POST['pass']
@@ -93,6 +93,7 @@ def login_page(request, *args, **kwargs):
         else:
             return render(request, 'login.html', {username: username})
     except KeyError as e:
+        if settings.DEBUG: sentry.captureException()
         # ask the user to enter the username and/or password
         terminal.tprint('\nUsername/password not defined: %s' % str(e), 'warn')
         page_settings['message'] = page_settings['message'] if 'message' in page_settings else "Please enter your username and password"
@@ -241,7 +242,9 @@ def new_user_password(request, uid=None, token=None):
             }
             notify.send_email(email_settings)
 
-        return render(request, 'login.html', {'is_error': False, 'message': 'We have sent a password recovery link to your email.'})
+        params['is_error'] = False
+        params['message'] = 'We have sent a password recovery link to your email.'
+        return render(request, 'login.html', params)
 
     except User.DoesNotExist as e:
         params['error'] = True
