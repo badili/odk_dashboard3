@@ -1765,6 +1765,7 @@ BadiliDash.prototype.initiateObjectManagement = function(){
         $('#modal_message').html(modal_message);
         var confirm_caption = dash.objects.button_settings[dash.objects.cur_object]['confirm_btn_caption'] == undefined ? dash.objects.cur_action : dash.objects.button_settings[dash.objects.cur_object]['confirm_btn_caption'];
         $('#confirm').html(confirm_caption.toProperCase());
+
     });
 
     $('#confirm').on('click', function () {
@@ -1817,9 +1818,11 @@ BadiliDash.prototype.confirmSave = function(event){
         dash.objects.refresh_table = dash.objects.button_settings[dash.objects.cur_object]['table'];
         
         // if we are editing, add the object id
-        dash.objects.ajax_data = objectifyForm(form2validate.serializeArray());
+        if(dash.objects.ajax_data == undefined) dash.objects.ajax_data = objectifyForm(form2validate.serializeArray());
+        else dash.objects.ajax_data = $.merge( dash.objects.ajax_data, objectifyForm(form2validate.serializeArray()) );
+
         if(dash.objects.cur_action != undefined && dash.objects.cur_action != 'add'){
-            dash.objects.ajax_data['object_id'] = dash.objects.cur_row['pk_id'];
+            if(dash.objects.ajax_data['object_id'] == undefined) dash.objects.ajax_data['object_id'] = dash.objects.cur_row['pk_id'];
         }
         $('#confirmModal').modal();
     }
@@ -1852,3 +1855,7 @@ function objectifyForm(formArray) {
 String.prototype.toProperCase = function () {
     return this.replace(/\w\S*/g, function(txt){return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();});
 };
+
+$(document).on('click', '.nav-deep.badili-nav .nav-item', function(){
+    $(this).find('ul').toggle(1000);
+});

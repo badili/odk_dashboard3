@@ -59,8 +59,6 @@ User = get_user_model()
 def login_page(request, *args, **kwargs):
     csrf_token = get_or_create_csrf_token(request)
     page_settings = {'page_title': "%s | Login Page" % settings.SITE_NAME, 'csrf_token': csrf_token}
-    print(args)
-    print(kwargs)
 
     try:
         # check if we have some username and password in kwargs
@@ -116,9 +114,6 @@ def login_page(request, *args, **kwargs):
 def user_logout(request):
     logout(request)
     # specifically clear this session variable
-    print(request.session.session_key)
-    for key in request.session.keys():
-        print(key)
     if 'cur_user' in request.session:
         del request.session['cur_user']
 
@@ -223,7 +218,6 @@ def new_user_password(request, uid=None, token=None):
             return render(request, 'new_password.html', params)
         else:
             # lets send an email with the reset link
-            print(request.POST.get('email'))
             user = User.objects.filter(email=request.POST.get('email')).get()
             notify = Notification()
             uid = urlsafe_base64_encode(force_bytes(user.pk))
@@ -294,9 +288,10 @@ def download_page(request):
     # get all the data to be used to construct the tree
     parser = OdkParser()
     is_first_login = parser.is_first_login()
-    are_ona_settings_saved = parser.are_ona_settings_saved()
-    if is_first_login is True or are_ona_settings_saved is False:
-        return system_settings(request)
+    if settings.USE_DB_SETTINGS:
+        are_ona_settings_saved = parser.are_ona_settings_saved()
+        if is_first_login is True or are_ona_settings_saved is False:
+            return system_settings(request)
 
     all_forms = parser.get_all_forms()
     page_settings = {
@@ -361,7 +356,7 @@ def update_db(request):
         parser.update_sdss_db()
     except Exception as e:
         logging.error(traceback.format_exc())
-        print(str(e))
+        if settings.DEBUG: print(str(e))
         return HttpResponse(traceback.format_exc())
 
     return HttpResponse(json.dumps({'error': False, 'message': 'Database updated'}))
@@ -371,8 +366,10 @@ def update_db(request):
 def form_structure(request):
     # given a form id, get the structure for the form
     parser = OdkParser()
+
     is_first_login = parser.is_first_login()
-    are_ona_settings_saved = parser.are_ona_settings_saved()
+    if settings.USE_DB_SETTINGS:
+        are_ona_settings_saved = parser.are_ona_settings_saved()
     # if is_first_login is True or are_ona_settings_saved is False:
     #     return system_settings(request)
 
@@ -397,10 +394,11 @@ def download_data(request):
     # given the nodes, download the associated data
     parser = OdkParser(None, None, settings.ONADATA_TOKEN)
     is_first_login = parser.is_first_login()
-    are_ona_settings_saved = parser.are_ona_settings_saved()
     
-    if is_first_login is True or are_ona_settings_saved is False:
-        return system_settings(request)
+    if settings.USE_DB_SETTINGS:
+        are_ona_settings_saved = parser.are_ona_settings_saved()
+        if is_first_login is True or are_ona_settings_saved is False:
+            return system_settings(request)
 
     try:
         data = json.loads(request.body)
@@ -441,9 +439,11 @@ def download(request):
     # given the nodes, download the associated data
     parser = OdkParser()
     is_first_login = parser.is_first_login()
-    are_ona_settings_saved = parser.are_ona_settings_saved()
-    if is_first_login is True or are_ona_settings_saved is False:
-        return system_settings(request)
+
+    if settings.USE_DB_SETTINGS:
+        are_ona_settings_saved = parser.are_ona_settings_saved()
+        if is_first_login is True or are_ona_settings_saved is False:
+            return system_settings(request)
 
     try:
         data = json.loads(request.body)
@@ -451,7 +451,7 @@ def download(request):
     except KeyError:
         return HttpResponse(traceback.format_exc())
     except Exception as e:
-        print(str(e))
+        if settings.DEBUG: print(str(e))
         logging.error(traceback.format_exc())
 
     wrapper = FileWrapper(open(filename))
@@ -469,13 +469,15 @@ def refresh_forms(request):
     """
     parser = OdkParser()
     is_first_login = parser.is_first_login()
-    are_ona_settings_saved = parser.are_ona_settings_saved()
-    if is_first_login is True or are_ona_settings_saved is False:
-        return system_settings(request)
 
+    if settings.USE_DB_SETTINGS:
+        are_ona_settings_saved = parser.are_ona_settings_saved()
+        if is_first_login is True or are_ona_settings_saved is False:
+            return system_settings(request)
 
     try:
-        all_forms = parser.refresh_forms()
+        # when refreshing the forms, dont process the groups but auto-create the form groups
+        all_forms = parser.refresh_forms(False, True)
     except Exception:
         logging.error(traceback.format_exc())
 
@@ -551,11 +553,9 @@ def add_user(request):
 def get_or_create_csrf_token(request):
     token = request.META.get('CSRF_COOKIE', None)
     if token is None:
-        print('Getting a new token')
+        # Getting a new token
         token = csrf.get_token(request)
         request.META['CSRF_COOKIE'] = token
-    else:
-        print('using an old token')
 
     request.META['CSRF_COOKIE_USED'] = True
     return token
