@@ -74,9 +74,6 @@ def login_page(request, *args, **kwargs):
             page_settings['message'] = kwargs['message']
 
         if username is not None:
-            if settings.DEBUG:
-                print(username)
-                print(password)
             user = authenticate(username=username, password=password)
 
             if user is None:
