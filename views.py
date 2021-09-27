@@ -547,6 +547,39 @@ def add_user(request):
         raise
 
 
+@login_required(login_url='/login')
+def update_user(request, user_id):
+    try:
+        UserModel = get_user_model()
+        cur_user = User.objects.get(id=user_id)
+
+        nickname=request.POST.get('username')
+        username=request.POST.get('username')
+        designation=request.POST.get('designation')
+        tel=request.POST.get('tel')
+        email=request.POST.get('email')
+        first_name=request.POST.get('first_name')
+        last_name=request.POST.get('surname')
+
+        cur_user.nickname = username
+        cur_user.username = username
+        cur_user.designation = designation
+        cur_user.tel = tel
+        cur_user.email = email
+        cur_user.first_name = first_name
+        cur_user.last_name = last_name
+
+        cur_user.full_clean()
+        cur_user.save()
+    
+    except ValidationError as e:
+        return {'error': True, 'message': 'There was an error while saving the user: %s' % str(e)}
+    except Exception as e:
+        if settings.DEBUG: terminal.tprint(str(e), 'fail')
+        sentry_ce()
+        raise
+
+
 def get_or_create_csrf_token(request):
     token = request.META.get('CSRF_COOKIE', None)
     if token is None:
