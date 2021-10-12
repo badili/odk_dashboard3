@@ -1,6 +1,6 @@
 .cssload-loader{ display: none; z-index: 100001; }
 #overlay {
-  position: absolute;
+  position: fixed;
   display: none;
   top: 0;
   left: 0;
