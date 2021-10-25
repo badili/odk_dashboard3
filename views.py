@@ -64,8 +64,8 @@ def login_page(request, *args, **kwargs):
         # check if we have some username and password in kwargs
         if 'kwargs' in kwargs:
             # use the explicitly passed username and password over the form filled ones
-            username = kwargs['kwards']['user']['username']
-            password = kwargs['kwards']['user']['pass']
+            username = kwargs['kwargs']['user']['username']
+            password = kwargs['kwargs']['user']['pass']
         else:
             username = request.POST['username']
             password = request.POST['pass']
