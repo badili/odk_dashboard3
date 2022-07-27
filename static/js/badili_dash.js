@@ -154,6 +154,7 @@ function BadiliDash() {
     $(document).on('click', '#save_form_details', this.saveFormSettings);
     $(document).on('click', '#save_group_details', this.saveGroupDetails);
     $(document).on('click', '.refresh_view_data', this.refreshViewData);
+    $(document).on('click', '.json-string, .json-literal', this.showNodeValue);
     
 }
 
@@ -1840,6 +1841,62 @@ BadiliDash.prototype.showProcessing = function(){
 };
 
 // END OF BUTTON ACTIONS MANAGEMENT
+
+BadiliDash.prototype.initiateDataEditing = function(){
+    var settings = {
+      serviceUrl:'/submissions_search/', minChars:1, maxHeight:400, width:380,
+      zIndex: 9999, deferRequestBy: 400, //miliseconds
+      noCache: true, //default is false, set to true to disable caching
+      formatResult: function(response, searchString){ 
+         var pattern = '(' + searchString.replace(Main.reEscape, '\\$1') + ')';
+         return response.data.project.replace(new RegExp(pattern, 'gi'), '<strong>$1<\/strong>') + ', ' + response.data.pi;
+      }
+   };
+   // not working.... going around it FOR NOW
+   // $('#globalsearch').autocomplete(settings);
+   dash.loadRawSubmission(1948);
+};
+
+BadiliDash.prototype.loadRawSubmission = function(submission_id){
+    // load a raw submission
+    $('#spinnermModal').modal('show');
+    $.ajax({
+        type: "POST", url: `/raw_submission/`, dataType: 'json', data: {subm_id: submission_id},
+        error: dash.communicationError,
+        success: function (data) {
+            $('#spinnermModal').modal('hide');
+            if (data.error) {
+                dash.showNotification('There was an error while loading the raw submission. Please contact the system administrator!', 'error', true);
+            } else {
+                // console.log(data);
+                dash.renderJson(data.submission);
+            }
+        }
+    });
+};
+
+BadiliDash.prototype.renderJson = function(json_data) {
+    /*
+    try {
+        var input = eval('(' + json_data + ')');
+    }
+    catch (error) {
+        return alert("Cannot eval JSON: " + error);
+    }
+    */
+    var options = {
+        collapsed: false,
+        rootCollapsable: true,
+        withQuotes: false,
+        withLinks: true,
+        bigNumbers: true
+    };
+    $('#json-renderer').jsonViewer(json_data, options);
+};
+
+BadiliDash.prototype.showNodeValue = function(){
+    console.log( $(this).parent().html().substring(0,$(this).parent().html().indexOf(':')), $(this).html() );
+};
 
 var dash = new BadiliDash();
 

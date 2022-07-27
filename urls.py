@@ -41,6 +41,10 @@ urlpatterns = [
     url(r'^save_group_details/$', views.save_group_details, name='save_group_details'),
     url(r'^refresh_view_data/$', views.refresh_view_data, name='refresh_view_data'),
 
+    url(r'^record_viewer/$', views.record_viewer, name='record_viewer'),
+    url(r'^submissions_search/$', views.submissions_search, name='submissions_search'),
+    url(r'^raw_submission/$', views.fetch_submission, name='fetch_submission'),
+
     # re_path(r'^save_user_password$', views.save_user_password, name='save_user_password'),
     re_path(r'^new_user_password/?(?P<uid>[0-9A-Za-z_\-]+)?/?(?P<token>[0-9A-Za-z\-]+)?$', views.new_user_password, name='new_user_password'),
     re_path(r'^recover_password$', views.recover_password, name='recover_password'),

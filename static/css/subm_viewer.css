@@ -1,0 +1,8 @@
+#json-renderer{
+    min-height: 500px;
+    max-height: 700px;
+    overflow:  auto;
+}
+pre#json-renderer {
+  border: 1px solid #aaa;
+}

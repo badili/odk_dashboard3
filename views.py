@@ -28,7 +28,7 @@ from wsgiref.util import FileWrapper
 
 from vendor.odk_parser import OdkParser
 from vendor.terminal_output import Terminal
-from vendor.models import ODKForm, FormViews, Profile
+from vendor.models import ODKForm, FormViews, Profile, RawSubmissions
 from vendor.notifications import Notification
 
 from raven import Client
@@ -949,3 +949,45 @@ def zip_response(json_data):
     response.headers['Content-Length'] = len(response.data)
 
     return response
+
+def record_viewer(request):
+    csrf_token = get_or_create_csrf_token(request)
+    page_settings = {
+        'page_title': "%s | Home" % settings.SITE_NAME,
+        'csrf_token': csrf_token,
+        'site_name': settings.SITE_NAME,
+        'section_title': 'Manage Collected Data'
+    }
+    return render(request, 'record_viewer.html', page_settings)
+
+
+def submissions_search(request):
+    try:
+        print(request.POST)
+
+    except Exception as e:
+        return record_viewer(request, 'There was an error while fetching the searching the submissions. %s' % str(e))
+
+
+def fetch_submission(request):
+    try:
+        subm_id= request.POST.get('subm_id')
+        odk_parser = OdkParser(None, None, None)
+        cur_submission = RawSubmissions.objects.select_related('form').values('form__form_id', 'uuid').get(id=subm_id)
+        # this_submissions = self.odk_parser.fetch_merge_data(form_id, None, 'json', 'submissions', None, None, True, True, None)
+        # this_submissions = self.get_form_submissions_as_json(int(form_id), nodes, uuids, update_local_data, is_dry_run, submission_filters)
+        
+        # this_submission = odk_parser.get_form_submissions_as_json(cur_submission['form__form_id'], None, [cur_submission['uuid']], False, True, None)
+
+        this_submission = odk_parser.fetch_merge_data(cur_submission['form__form_id'], None, 'json', 'submissions', None, [cur_submission['uuid']], False, False, None)
+
+        # terminal.tprint(json.dumps(this_submission[0]), 'debug')
+
+        return return_json({'error': False, 'submission': this_submission[0]})
+
+    except Exception as e:
+        if settings.DEBUG: terminal.tprint(str(e), 'fail')
+        sentry.captureException()
+        return return_json({'error': True, 'message': "There was an error while fetching the submission from the server."})
+
+
