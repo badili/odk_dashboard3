@@ -6,3 +6,8 @@
 pre#json-renderer {
   border: 1px solid #aaa;
 }
+#json_editor {
+    width: 100%;
+    min-height: 600px;
+    font-size: smaller;
+}

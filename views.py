@@ -963,17 +963,29 @@ def record_viewer(request):
 
 def submissions_search(request):
     try:
-        print(request.POST)
+        s_query = request.GET.get('query')
+        submissions = RawSubmissions.objects.select_related('form').filter(raw_data__icontains=s_query).values('submission_time', 'form__form_name', 'id').all()
+
+        to_return = []
+        upper_limit = 10
+        i = 0
+        for subm in submissions:
+            i += 1
+            to_return.append({'data': subm['id'], 'value': "%s - %s" % (subm['form__form_name'], subm['submission_time']) })
+
+            if i == upper_limit: break
+
+        return return_json({'error': False, 'query': s_query, 'suggestions': to_return})
 
     except Exception as e:
-        return record_viewer(request, 'There was an error while fetching the searching the submissions. %s' % str(e))
+        return return_json( {'error': True, 'message': 'There was an error while fetching the searching the submissions. %s' % str(e)} )
 
 
 def fetch_submission(request):
     try:
         subm_id= request.POST.get('subm_id')
         odk_parser = OdkParser(None, None, None)
-        cur_submission = RawSubmissions.objects.select_related('form').values('form__form_id', 'uuid').get(id=subm_id)
+        cur_submission = RawSubmissions.objects.select_related('form').values('form__form_id', 'uuid', 'raw_data').get(id=subm_id)
         # this_submissions = self.odk_parser.fetch_merge_data(form_id, None, 'json', 'submissions', None, None, True, True, None)
         # this_submissions = self.get_form_submissions_as_json(int(form_id), nodes, uuids, update_local_data, is_dry_run, submission_filters)
         
@@ -983,7 +995,7 @@ def fetch_submission(request):
 
         # terminal.tprint(json.dumps(this_submission[0]), 'debug')
 
-        return return_json({'error': False, 'submission': this_submission[0]})
+        return return_json({'error': False, 'submission': this_submission[0], 'raw_submission': cur_submission['raw_data']})
 
     except Exception as e:
         if settings.DEBUG: terminal.tprint(str(e), 'fail')

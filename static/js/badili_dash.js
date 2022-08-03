@@ -154,8 +154,30 @@ function BadiliDash() {
     $(document).on('click', '#save_form_details', this.saveFormSettings);
     $(document).on('click', '#save_group_details', this.saveGroupDetails);
     $(document).on('click', '.refresh_view_data', this.refreshViewData);
-    $(document).on('click', '.json-string, .json-literal', this.showNodeValue);
-    
+    $(document).on('dblclick', '#json-renderer', this.showNodeValue);
+    $(document).on('click', '.cancel-edits', this.cancelEdits);
+    $(document).on('click', '#confirmModal #confirm', this.saveChanges);
+    $(document).on('click', '.save-edits', function(){
+        // confirm modal for edits
+        // check that we have a reason for edits and one checkbox is selected
+        if($('#change_reason').val() == ''){
+            dash.showNotification('Please enter a reason for editing the raw ODK data.', 'error', true);
+            return;
+        }
+        if($("input[type='radio'][name='reprocess']:checked").val() == undefined){
+            dash.showNotification('Please select whether to reprocess the processed data.', 'error', true);
+            return;
+        }
+        try {
+            JSON.parse($('#json_editor').val());
+        }
+        catch (e) {
+            dash.showNotification('The modified data is invalid. Please try again later.', 'error', true);
+            return;
+        }
+        $('#modal_message').html(`Are you sure you want to edit the RAW ODK data. This action is potentially dangerous`);
+        $('#confirmModal').modal('show');
+    });
 }
 
 BadiliDash.prototype.initiate = function(){
@@ -1844,17 +1866,18 @@ BadiliDash.prototype.showProcessing = function(){
 
 BadiliDash.prototype.initiateDataEditing = function(){
     var settings = {
-      serviceUrl:'/submissions_search/', minChars:1, maxHeight:400, width:380,
+      serviceUrl:'/submissions_search/', minChars:4, maxHeight:400, width:780,
       zIndex: 9999, deferRequestBy: 400, //miliseconds
       noCache: true, //default is false, set to true to disable caching
-      formatResult: function(response, searchString){ 
-         var pattern = '(' + searchString.replace(Main.reEscape, '\\$1') + ')';
-         return response.data.project.replace(new RegExp(pattern, 'gi'), '<strong>$1<\/strong>') + ', ' + response.data.pi;
+      onSelect: function (suggestion) {
+        // $('#globalsearch').val(suggestion.data);
+        dash.subm_id = suggestion.data;
+        dash.loadRawSubmission(suggestion.data);
       }
    };
    // not working.... going around it FOR NOW
-   // $('#globalsearch').autocomplete(settings);
-   dash.loadRawSubmission(1948);
+   $('#globalsearch').autocomplete(settings);
+   // dash.loadRawSubmission(1948);
 };
 
 BadiliDash.prototype.loadRawSubmission = function(submission_id){
@@ -1869,21 +1892,15 @@ BadiliDash.prototype.loadRawSubmission = function(submission_id){
                 dash.showNotification('There was an error while loading the raw submission. Please contact the system administrator!', 'error', true);
             } else {
                 // console.log(data);
-                dash.renderJson(data.submission);
+                dash.json_data = data.submission;
+                dash.raw_data = data.raw_submission;
+                dash.renderJson();
             }
         }
     });
 };
 
-BadiliDash.prototype.renderJson = function(json_data) {
-    /*
-    try {
-        var input = eval('(' + json_data + ')');
-    }
-    catch (error) {
-        return alert("Cannot eval JSON: " + error);
-    }
-    */
+BadiliDash.prototype.renderJson = function() {
     var options = {
         collapsed: false,
         rootCollapsable: true,
@@ -1891,11 +1908,58 @@ BadiliDash.prototype.renderJson = function(json_data) {
         withLinks: true,
         bigNumbers: true
     };
-    $('#json-renderer').jsonViewer(json_data, options);
+    $('.editing').hide()
+    $('#viewer').html(`<pre id="json-renderer" class='json-document'></pre>`);
+    $('#json-renderer').jsonViewer(dash.json_data, options);
 };
 
 BadiliDash.prototype.showNodeValue = function(){
-    console.log( $(this).parent().html().substring(0,$(this).parent().html().indexOf(':')), $(this).html() );
+    $('#viewer').html(`<div class='form-group'><textarea id='json_editor'></textarea></div>`);
+    $('#json_editor').val(JSON.stringify(dash.raw_data, null, 4));
+    $('.editing').toggle();
+};
+
+BadiliDash.prototype.cancelEdits = function(){
+    $('#viewer').html(`<pre id="json-renderer" class='json-document'></pre>`);
+    dash.renderJson()
+    $('.editing').toggle();
+};
+
+BadiliDash.prototype.saveChanges = function(){
+    var data_changes = {
+        'subm_id': dash.subm_id,
+        'reprocess_data': $("input[type='radio'][name='reprocess']:checked").val(),
+        'change_reason': $('#change_reason').val(),
+        'new_json': $('#json_editor').val()
+    };    
+
+    dash.showProcessing();
+    $.ajax({
+        type: 'POST', url: '/submission_edits_save/', dataType: 'json', data: data_changes,
+        error: function(){
+            dash.endShowProcessing();
+            $('#confirmModal').modal('hide');
+            $('.modal-backdrop').remove();
+            $('.modal-backdrop').remove();
+            dash.showNotification('There was an error while saving the changes', 'error', true);
+        },
+        success: function (data) {
+            dash.endShowProcessing();
+            $('#confirmModal').modal('hide');
+            $('.modal-backdrop').remove();
+            $('.modal-backdrop').remove();
+            if (data.error) {
+                dash.showNotification('There was an error while saving the changes', 'error', true);
+                return;
+            } else {
+                dash.showNotification('The RAW ODK data has been saved successfully!', 'success', true);
+                dash.json_data = JSON.parse($('#json_editor').val());
+                $('#change_reason').val('');
+                dash.renderJson();
+            }
+        }
+    });
+
 };
 
 var dash = new BadiliDash();
