@@ -81,11 +81,12 @@ function BadiliDash() {
     </div>";
     var merged_views_end = "</div>";
 
-    $(document).on('select', '#all_forms', function(event){
-        var args = event.args;
-        if (args) {
+    $(document).on('change', '#odk_forms', function(event){
+        // console.log(event);
+        // var args = event.args;
+        if ($('#odk_forms').val() != '-1') {
             // get the form structure
-            dash.formStructure(args.item.originalItem.uid);
+            dash.formStructure($('#odk_forms').val());
         }
     });
 
@@ -191,7 +192,6 @@ BadiliDash.prototype.initiate = function(){
  * @returns {undefined}
  */
 BadiliDash.prototype.initiateAllForms = function(){
-    console.log(dash.data.all_forms);
     var source = {
         localdata: dash.data.all_forms,
         id:"id",
@@ -199,8 +199,16 @@ BadiliDash.prototype.initiateAllForms = function(){
         datafields:[ {name:"id"}, {name:"title"} ]
     };
     var data_source = new $.jqx.dataAdapter(source);
-    $("#all_forms").jqxComboBox({ selectedIndex: 0, source: data_source, displayMember: "title", valueMember: "id", width: '97%', theme: dash.theme });
-    $("#all_forms").addClass('form-control m-b');
+    // $("#all_forms").jqxComboBox({ selectedIndex: 0, source: data_source, displayMember: "title", valueMember: "id", width: '97%', theme: dash.theme });
+    // $("#all_forms").jqxComboBox({ selectedIndex: 0, source: data_source, displayMember: "title", valueMember: "id", width: '97%' });
+    // $("#all_forms").addClass('form-control m-b');
+
+    var select_forms = "<select name='select_form' id='odk_forms' class=''>";
+    $.each(dash.data.all_forms, function(i, that){
+        select_forms += `<option value='${that.id}'> ${that.title}</option>`;
+    });
+    select_forms += '</select>';
+    $("#all_forms").html(select_forms);
 };
 
 
@@ -441,7 +449,7 @@ BadiliDash.prototype.processDownloadChoice = function(){
  */
 BadiliDash.prototype.downloadData = function(user_action, view_name, action='/get_data/', filename=undefined){
     view_name = (view_name == undefined) ? '' : view_name;
-    var data = {'nodes[]': dash.selected_node_ids, action: user_action, 'form_id': dash.sel_form.value, 'format': 'xlsx', 'view_name': view_name, 'filter_by': dash.data.filter_by};
+    var data = {'nodes[]': dash.selected_node_ids, action: user_action, 'form_id': $('#odk_forms').val(), 'format': 'xlsx', 'view_name': view_name, 'filter_by': dash.data.filter_by};
 
     var xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
@@ -476,7 +484,7 @@ BadiliDash.prototype.downloadData = function(user_action, view_name, action='/ge
                       + "_" +
                       ("0" + d.getHours()).slice(-2) + ("0" + d.getMinutes()).slice(-2) + ("0" + d.getSeconds()).slice(-2);
 
-                a.download = 'Form'+ dash.sel_form.value + '_'+ datestring + '.xlsx';
+                a.download = 'Form' + $("#odk_forms option:selected").text() + ' - '+ datestring + '.xlsx';
             }
             else{
                 a.download = filename +'.xlsx'
@@ -1707,6 +1715,8 @@ BadiliDash.prototype.refreshViewData = function(){
 };
 
 BadiliDash.prototype.showLoadingSpinner = function(loading_text='Loading...'){
+    $('#overlay, .download_loader').css({'display': 'block'});
+    /**
     if (typeof $('body').loadingModal === "function") {
         $('body').loadingModal({
           position: 'auto',
@@ -1716,13 +1726,17 @@ BadiliDash.prototype.showLoadingSpinner = function(loading_text='Loading...'){
           backgroundColor: 'rgb(0,0,0)',
           animation: 'cubeGrid'
         });
-    }
+    } */
 };
 
 BadiliDash.prototype.destroyLoadingSpinner = function(){
+    $('#overlay, .download_loader').css({'display': 'none'});
+
+    /**
     if (typeof $('body').loadingModal === "function") {
         $('body').loadingModal('destroy');
     }
+    */
 };
 
 // BUTTON ACTIONS MANAGEMENT
