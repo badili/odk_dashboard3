@@ -447,9 +447,10 @@ BadiliDash.prototype.processDownloadChoice = function(){
  * @param {string}  view_name   The name of the view that the user wants to save
  * @return {none}
  */
-BadiliDash.prototype.downloadData = function(user_action, view_name, action='/get_data/', filename=undefined){
+BadiliDash.prototype.downloadData = function(user_action, view_name, action='/get_data/', filename=undefined, form_id=undefined){
     view_name = (view_name == undefined) ? '' : view_name;
-    var data = {'nodes[]': dash.selected_node_ids, action: user_action, 'form_id': $('#odk_forms').val(), 'format': 'xlsx', 'view_name': view_name, 'filter_by': dash.data.filter_by};
+    form_id = form_id == undefined ? $('#odk_forms').val() : form_id;
+    var data = {'nodes[]': dash.selected_node_ids, action: user_action, 'form_id': form_id, 'format': 'xlsx', 'view_name': view_name, 'filter_by': dash.data.filter_by};
 
     var xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
@@ -505,6 +506,14 @@ BadiliDash.prototype.downloadData = function(user_action, view_name, action='/ge
     // You should set responseType as blob for binary responses
     xhttp.responseType = 'blob';
     xhttp.send(JSON.stringify(data));
+};
+
+BadiliDash.prototype.getFormStructure = function(){
+    dash.downloadData('get_structure', 'DataDictionary', '/get_structure/', 'Form Structure', $(this).data('object_id'));
+};
+
+BadiliDash.prototype.getXLSForm = function(){
+    dash.downloadData('get_xls_form', 'DataDictionary', '/get_xls_form/', 'XLS Form', $(this).data('object_id'));
 };
 
 BadiliDash.prototype.fnFormatResult = function (value, searchString) {

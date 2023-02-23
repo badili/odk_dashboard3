@@ -402,7 +402,65 @@ def download_data(request):
         # form_id, nodes, d_format, download_type, view_name, uuids=None, update_local_data=True, is_dry_run=True
         # data['filter'] = {}
         filters = data['filter_by'] if 'filter_by' in data else None
-        res = parser.fetch_merge_data(data['form_id'], data['nodes[]'], data['format'], data['action'], data['view_name'], None, True, settings.IS_DRY_RUN, filters)
+        nodes = data['nodes[]'] if 'nodes[]' in data else None
+        res = parser.fetch_merge_data(data['form_id'], nodes, data['format'], data['action'], data['view_name'], None, True, settings.IS_DRY_RUN, filters)
+
+        if res['is_downloadable'] is True:
+            filename = res['filename']
+            excel_file = open(filename, 'rb')
+            
+            response = HttpResponse(excel_file.read(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            response['Content-Disposition'] = 'attachment; filename=%s' % os.path.basename(filename)
+            response['Content-Length'] = os.path.getsize(filename)
+            os.remove(filename)
+        else:
+            response = HttpResponse(json.dumps({'error': False, 'message': res['message']}), content_type='text/json')
+            response['Content-Message'] = json.dumps({'error': False, 'message': res['message']})
+        return response
+
+    except KeyError as e:
+        terminal.tprint(traceback.format_exc(), 'fail')
+        terminal.tprint(str(e), 'fail')
+        response = HttpResponse(json.dumps({'error': True, 'message': str(e)}), content_type='text/json')
+        response['Content-Message'] = json.dumps({'error': True, 'message': str(e)})
+        return response
+
+    except Exception as e:
+        logging.debug(traceback.format_exc())
+        logging.error(str(e))
+        response = HttpResponse(json.dumps({'error': True, 'message': str(e)}), content_type='text/json')
+        response['Content-Message'] = json.dumps({'error': True, 'message': str(e)})
+        return response
+
+def download_structure(request):
+    # given the nodes, download the associated data
+    parser = OdkParser(None, None, settings.ONADATA_TOKEN)
+    is_first_login = parser.is_first_login()
+
+    if settings.USE_DB_SETTINGS:
+        are_ona_settings_saved = parser.are_ona_settings_saved()
+        if is_first_login is True or are_ona_settings_saved is False:
+            return system_settings(request)
+
+    try:
+        data = json.loads(request.body)
+        print(data)
+        res = parser.get_form_structure_from_server(data['form_id'])
+
+
+        if res['is_downloadable'] is True:
+            filename = res['filename']
+            excel_file = open(filename, 'rb')
+            
+            response = HttpResponse(excel_file.read(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            response['Content-Disposition'] = 'attachment; filename=%s' % os.path.basename(filename)
+            response['Content-Length'] = os.path.getsize(filename)
+            os.remove(filename)
+        else:
+            response = HttpResponse(json.dumps({'error': False, 'message': res['message']}), content_type='text/json')
+            response['Content-Message'] = json.dumps({'error': False, 'message': res['message']})
+
+        return response
     except KeyError as e:
         terminal.tprint(traceback.format_exc(), 'fail')
         terminal.tprint(str(e), 'fail')
@@ -416,20 +474,46 @@ def download_data(request):
         response['Content-Message'] = json.dumps({'error': True, 'message': str(e)})
         return response
 
-    if res['is_downloadable'] is True:
-        filename = res['filename']
-        excel_file = open(filename, 'rb')
-        
-        response = HttpResponse(excel_file.read(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-        response['Content-Disposition'] = 'attachment; filename=%s' % os.path.basename(filename)
-        response['Content-Length'] = os.path.getsize(filename)
-        os.remove(filename)
-    else:
-        response = HttpResponse(json.dumps({'error': False, 'message': res['message']}), content_type='text/json')
-        response['Content-Message'] = json.dumps({'error': False, 'message': res['message']})
+def download_xlsform(request):
+    # given the nodes, download the associated data
+    parser = OdkParser(None, None, settings.ONADATA_TOKEN)
+    is_first_login = parser.is_first_login()
 
-    return response
+    if settings.USE_DB_SETTINGS:
+        are_ona_settings_saved = parser.are_ona_settings_saved()
+        if is_first_login is True or are_ona_settings_saved is False:
+            return system_settings(request)
 
+    try:
+        data = json.loads(request.body)
+        res = parser.get_form_structure_from_server(data['form_id'])
+
+
+        if res['is_downloadable'] is True:
+            filename = res['filename']
+            excel_file = open(filename, 'rb')
+            
+            response = HttpResponse(excel_file.read(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            response['Content-Disposition'] = 'attachment; filename=%s' % os.path.basename(filename)
+            response['Content-Length'] = os.path.getsize(filename)
+            os.remove(filename)
+        else:
+            response = HttpResponse(json.dumps({'error': False, 'message': res['message']}), content_type='text/json')
+            response['Content-Message'] = json.dumps({'error': False, 'message': res['message']})
+
+        return response
+    except KeyError as e:
+        terminal.tprint(traceback.format_exc(), 'fail')
+        terminal.tprint(str(e), 'fail')
+        response = HttpResponse(json.dumps({'error': True, 'message': str(e)}), content_type='text/json')
+        response['Content-Message'] = json.dumps({'error': True, 'message': str(e)})
+        return response
+    except Exception as e:
+        logging.debug(traceback.format_exc())
+        logging.error(str(e))
+        response = HttpResponse(json.dumps({'error': True, 'message': str(e)}), content_type='text/json')
+        response['Content-Message'] = json.dumps({'error': True, 'message': str(e)})
+        return response
 
 # @login_required(login_url='/login')
 def download(request):
