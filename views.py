@@ -20,7 +20,11 @@ from django.middleware import csrf
 from django_registration.exceptions import ActivationError
 from django_registration.backends.activation.views import RegistrationView, ActivationView
 from django.utils import timezone
-from django.utils.encoding import force_bytes, force_text
+try:
+    from django.utils.encoding import force_bytes, force_text
+except ImportError:
+    from django.utils.encoding import force_bytes, force_str as force_text
+
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.urls import reverse
 
@@ -67,6 +71,9 @@ def login_page(request, *args, **kwargs):
             username = kwargs['kwargs']['user']['username']
             password = kwargs['kwargs']['user']['pass']
         else:
+            print(request.POST)
+            print(request.POST['username'])
+            print(request.POST['pass'])
             username = request.POST['username']
             password = request.POST['pass']
 
@@ -74,6 +81,8 @@ def login_page(request, *args, **kwargs):
             page_settings['message'] = kwargs['message']
 
         if username is not None:
+            print(username)
+            print(password)
             user = authenticate(username=username, password=password)
 
             if user is None:
@@ -106,7 +115,6 @@ def login_page(request, *args, **kwargs):
         if settings.DEBUG: logging.error(traceback.format_exc())
         page_settings['message'] = "There was an error while authenticating you. Please try again and if the error persist, please contact the system administrator"
         return render(request, 'login.html', page_settings)
-
 
 def user_logout(request):
     logout(request)
@@ -182,6 +190,7 @@ def activate_user(request, user, token):
         notify.send_email(email_settings)
         
         uid = urlsafe_base64_encode(force_bytes(user.email))
+        print(reverse('new_user_password', kwargs={'uid': uid}))
         return HttpResponseRedirect(reverse('new_user_password', kwargs={'uid': uid}))
     
     except ActivationError as e:
@@ -205,6 +214,7 @@ def new_user_password(request, uid=None, token=None):
     # if not set, the user will have set their email on a user page
     current_site = get_current_site(request)
     params = {'site_name': settings.SITE_NAME, 'page_title': settings.SITE_NAME}
+    print(uid, token)
     
     # the uid is actually an encoded email
     try:
@@ -213,6 +223,11 @@ def new_user_password(request, uid=None, token=None):
             params['token'] = token
             params['user'] = uid
             return render(request, 'new_password.html', params)
+        
+        elif uid:
+            uuid = force_text(urlsafe_base64_decode(uid))
+            user = User.objects.filter(Q(id=uuid) | Q(email=uuid)).get()
+            print(user.pk)
         else:
             # lets send an email with the reset link
             user = User.objects.filter(email=request.POST.get('email')).get()
@@ -432,6 +447,30 @@ def download_data(request):
         response['Content-Message'] = json.dumps({'error': True, 'message': str(e)})
         return response
 
+
+def download_dictionary(request):
+    try:
+        #download the dictionary
+        data = json.loads(request.body)
+        parser = OdkParser(None, None, settings.ONADATA_TOKEN)
+        # make sure we have the structure defined
+        parser.get_form_structure_as_json(data['form_id'])
+        filename = parser.process_write_dictionary(data['form_id'])
+        excel_file = open(filename, 'rb')
+
+        response = HttpResponse(excel_file.read(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = 'attachment; filename=%s' % os.path.basename(filename)
+        response['Content-Length'] = os.path.getsize(filename)
+        os.remove(filename)
+
+        return response
+
+    except Exception as e:
+        sentry_ce()
+        response = HttpResponse(json.dumps({'error': True, 'message': str(e)}), content_type='text/json')
+        response['Content-Message'] = json.dumps({'error': True, 'message': str(e)})
+        return response
+
 def download_structure(request):
     # given the nodes, download the associated data
     parser = OdkParser(None, None, settings.ONADATA_TOKEN)
@@ -444,9 +483,7 @@ def download_structure(request):
 
     try:
         data = json.loads(request.body)
-        print(data)
         res = parser.get_form_structure_from_server(data['form_id'])
-
 
         if res['is_downloadable'] is True:
             filename = res['filename']

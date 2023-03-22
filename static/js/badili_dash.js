@@ -158,6 +158,7 @@ function BadiliDash() {
     $(document).on('dblclick', '#json-renderer', this.showNodeValue);
     $(document).on('click', '.cancel-edits', this.cancelEdits);
     $(document).on('click', '#confirmModal #confirm', this.saveChanges);
+    
     $(document).on('click', '.save-edits', function(){
         // confirm modal for edits
         // check that we have a reason for edits and one checkbox is selected
@@ -451,8 +452,10 @@ BadiliDash.prototype.downloadData = function(user_action, view_name, action='/ge
     view_name = (view_name == undefined) ? '' : view_name;
     form_id = form_id == undefined ? $('#odk_forms').val() : form_id;
     var data = {'nodes[]': dash.selected_node_ids, action: user_action, 'form_id': form_id, 'format': 'xlsx', 'view_name': view_name, 'filter_by': dash.data.filter_by};
+    dash.cur_filename = filename;
 
     var xhttp = new XMLHttpRequest();
+
     xhttp.onreadystatechange = function() {
         var a;
         if (xhttp.readyState === 4 && xhttp.status === 200) {
@@ -476,7 +479,8 @@ BadiliDash.prototype.downloadData = function(user_action, view_name, action='/ge
             // Trick for making downloadable link
             a = document.createElement('a');
             a.href = window.URL.createObjectURL(xhttp.response);
-            if(filename == undefined){
+            console.log(dash.cur_filename);
+            if(dash.cur_filename == undefined){
                 // Give filename you wish to download
                 var d = new Date();
 
@@ -488,7 +492,7 @@ BadiliDash.prototype.downloadData = function(user_action, view_name, action='/ge
                 a.download = 'Form' + $("#odk_forms option:selected").text() + ' - '+ datestring + '.xlsx';
             }
             else{
-                a.download = filename +'.xlsx'
+                a.download = dash.cur_filename +'.xlsx'
             }
             a.style.display = 'none';
             document.body.appendChild(a);
