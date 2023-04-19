@@ -1,3 +1,7 @@
+/**
+ * @todo Add try..catch block for all swal prompts 
+ */
+
 function BadiliDash() {
     this.data = {};
     this.theme = '';        // for jqWidgets
@@ -224,12 +228,7 @@ BadiliDash.prototype.formStructure = function (form_id) {
         success: function (data) {
             dash.destroyLoadingSpinner();
             if (data.error) {
-                console.log(data.message);
-                swal({
-                  title: "Error!",
-                  text: data.message,
-                  imageUrl: "/static/img/error-icon.png"
-                });
+                swal({title: "Error!", text: data.message, imageUrl: "/static/img/error-icon.png"});
                 return;
             } else {
                 // console.log(data);
@@ -350,21 +349,11 @@ BadiliDash.prototype.processButtonAction = function(event){
     }
     else{
         if(dash.selected_node_ids === undefined){
-            console.log('No forms defined...');
-            swal({
-              title: "Error!",
-              text: "Please select at least one FORM to process.",
-              imageUrl: "/static/img/error-icon.png"
-            });
+            swal({ title: "Error!", text: "Please select at least one FORM to process.", imageUrl: "/static/img/error-icon.png" });
             return;
         }
         if(dash.selected_node_ids.length === 0){
-            console.log('select nodes for processing...');
-            swal({
-              title: "Error!",
-              text: "Please select at least one node for processing.",
-              imageUrl: "/static/img/error-icon.png"
-            });
+            swal({ title: "Error!", text: "Please select at least one node for processing.", imageUrl: "/static/img/error-icon.png" });
             return;
         }
     }
@@ -428,11 +417,7 @@ BadiliDash.prototype.processDownloadChoice = function(){
         view_name = $('#view_name').val();
         if (view_name == '' || view_name == 'undefined'){
             $('#view_name-group').addClass('has-error');
-            swal({
-              title: "Error!",
-              text: "Please enter the name of the view",
-              imageUrl: "/static/img/error-icon.png"
-            });
+            swal({ title: "Error!", text: "Please enter the name of the view", imageUrl: "/static/img/error-icon.png" });
             return;
         }
     }
@@ -465,12 +450,13 @@ BadiliDash.prototype.downloadData = function(user_action, view_name, action='/ge
                 reader.onload = function() {
                     var response = JSON.parse(reader.result);
                     dash.destroyLoadingSpinner();
-                    swal({
-                      title: "Error!",
-                      text: response.message,
-                      imageUrl: "/static/img/error-icon.png",
-                      html: true
-                    });
+                    try{
+                        swal({ title: "Error!", text: response.message, imageUrl: "/static/img/error-icon.png", html: true });
+                    }
+                    catch(err){
+                        Swal.fire({ icon: 'error', title: "Error!", text: response.message });
+                    }
+                    
                 }
                 reader.readAsText(xhttp.response);
                 return;
@@ -618,12 +604,12 @@ BadiliDash.prototype.initiateViewsManagement = function(){
                         success: function (data) {
                             dash.destroyLoadingSpinner();
                             if (data.error) {
-                                console.log(data.message);
-                                swal({
-                                  title: "Error!",
-                                  text: data.message,
-                                  imageUrl: "/static/img/error-icon.png"
-                                });
+                                try{
+                                    swal({ title: "Error!", text: data.message, imageUrl: "/static/img/error-icon.png" });
+                                }
+                                catch{
+                                    Swal.fire({ icon: 'error', title: "Error!", text: data.message })
+                                }
                                 return;
                             }
                             else {
